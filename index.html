@@ -10,7 +10,7 @@
   <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
   <title>DEWFALL · Where water falls from air</title>
-  <link rel="stylesheet" href="css/styles.css?v=1788561436" />
+  <link rel="stylesheet" href="css/styles.css?v=1788561827" />
 </head>
 <body>
   <div id="loader" class="loader" aria-live="polite">
@@ -83,9 +83,19 @@
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-other-fn" /> Other FN settlement lands</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> Water need (long + short)</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-world" checked /> World Indigenous / BWA need</label>
+        <label class="toggle toggle-market"><input type="checkbox" id="layer-drought" checked /> Drought / arid markets</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-northern" /> Northern remote highlight</label>
         <label class="toggle toggle-solar"><input type="checkbox" id="layer-solar" /> Solar potential</label>
         <label class="toggle"><input type="checkbox" id="layer-rotate" checked /> Auto-rotate</label>
+      </div>
+    </div>
+    <div class="ctrl-group filter-chips-group">
+      <label class="group-label">Focus filter</label>
+      <div class="filter-chips" role="group" aria-label="Map focus filter">
+        <button type="button" class="filter-chip active" data-filter="all">All</button>
+        <button type="button" class="filter-chip" data-filter="need">Need only</button>
+        <button type="button" class="filter-chip" data-filter="markets">Markets only</button>
+        <button type="button" class="filter-chip" data-filter="highfit">High fit</button>
       </div>
     </div>
     <div class="legend">
@@ -98,6 +108,7 @@
         <span class="need-swatch dnc"></span> Do not consume / use
         <span class="need-swatch north"></span> Northern remote
         <span class="need-swatch world"></span> World Indigenous / BWA (same amber pins)
+        <span class="need-swatch drought"></span> Drought / arid markets (teal diamond — commercial)
       </div>
       <div class="legend-need legend-bc">BC DWAs from FNHA (Aug 2026) included in need layer</div>
       <div class="legend-solar" id="legend-solar">
@@ -107,7 +118,7 @@
         <div class="legend-need legend-bc">Irradiance model estimates — not a utility interconnection study</div>
       </div>
     </div>
-    <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Amber world pins = curated Indigenous / BWA need outside Canada. Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
+    <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Amber world pins = curated Indigenous / BWA need outside Canada. Teal diamonds = drought / arid <em>commercial</em> first markets (not need pins). Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
   </aside>
 
 
@@ -121,7 +132,7 @@
       <input type="search" id="search-input" placeholder="Community, reserve, city, province…" autocomplete="off" enterkeyhint="search" aria-label="Search locations" />
     </div>
     <div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
-    <p class="search-hint" id="search-hint">Type to find water-need sites, reserves, or yield cities.</p>
+    <p class="search-hint" id="search-hint">Type to find markets, water-need sites, reserves, or yield cities.</p>
   </aside>
 
   <aside class="panel rank-panel" id="panel-rank" aria-label="Rankings">
@@ -133,6 +144,7 @@
           <button type="button" class="rank-tab" data-rank="need" role="tab">Water need</button>
           <button type="button" class="rank-tab" data-rank="world" role="tab">World need</button>
           <button type="button" class="rank-tab" data-rank="fit" role="tab">Fit</button>
+          <button type="button" class="rank-tab" data-rank="markets" role="tab">Markets</button>
         </div>
         <button type="button" class="sheet-close" id="close-list" aria-label="Close list">×</button>
       </div>
@@ -153,7 +165,7 @@
     <div class="title">Product context</div>
     <strong>DEWFALL Alpha</strong> — modular solar-ready residential AWG.
     R290 refrigeration core + regenerating sorbent; Tier 5 = six TEC cassettes on dedicated solar, AI-gated by dew point, temps, airflow, energy.
-    <em>US Southwest</em> = drought demand · <em>coastal humid</em> = high yield.
+    <em>Teal market pins</em> = drought / arid commercial beachheads · <em>coastal humid</em> = high yield.
     <em>FN reserves</em> = NRCan Aboriginal Lands (IR). <em>Water need</em> = ISC long-term + short-term DWAs + FNHA BC (often cold → lower model L/day).
     <div class="attr">Data: NRCan ALC · ISC LTDWA Aug 2026 · ISC short-term Sep 2026 · FNHA DWA Aug 2026</div>
   </aside>
@@ -163,7 +175,7 @@
     <div class="tooltip-body" id="tooltip-body"></div>
   </div>
 
-  <script src="js/updater.js?v=1788561436"></script>
-  <script src="js/loader.js?v=1788561436"></script>
+  <script src="js/updater.js?v=1788561827"></script>
+  <script src="js/loader.js?v=1788561827"></script>
 </body>
 </html>

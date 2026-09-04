@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var CACHE_BUST = '1788561436';
+  var CACHE_BUST = '1788561827';
   function withBust(url) {
     if (!url || /^https?:/i.test(url)) return url;
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;
@@ -24,6 +24,7 @@
     { src: 'data/fn-bc-dwa.js', optional: true },
     { src: 'data/fn-reserves.js', optional: true },
     'data/world-water-need.js',
+    'data/drought-markets.js',
     'js/app.js'
   ];
 

@@ -23,6 +23,12 @@
   function getWorldMeta() {
     return window.DEWFALL_WORLD_WATER_NEED_META || {};
   }
+  function getDroughtRaw() {
+    return window.DEWFALL_DROUGHT_MARKETS || [];
+  }
+  function getDroughtMeta() {
+    return window.DEWFALL_DROUGHT_MARKETS_META || {};
+  }
 
   /** Merge need lists: long-term wins if same community; else short / BC. */
   function normNeedName(n) {
@@ -110,9 +116,11 @@
       otherFn: false,
       ltdwa: true,
       world: true,
+      drought: true,
       northern: false,
       solar: false,
     },
+    filter: 'all',
     autoRotate: true,
     selectedId: null,
     selectedKind: null,
@@ -129,6 +137,7 @@
   let enriched = [];
   let enrichedFn = [];
   let enrichedWorld = [];
+  let enrichedDrought = [];
   let fnById = {};
   let tooltipEl = null;
   let tooltipBodyEl = null;
@@ -273,15 +282,15 @@
       });
     });
 
-    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'world', 'northern', 'solar'].forEach((key) => {
+    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'world', 'drought', 'northern', 'solar'].forEach((key) => {
       const el = $('#layer-' + (key === 'reserves' ? 'reserves' : key));
       if (!el) return;
       el.checked = !!state.layers[key];
       el.addEventListener('change', () => {
         state.layers[key] = el.checked;
-        if (key === 'ltdwa' || key === 'world' || key === 'northern' || key === 'reserves') {
+        if (key === 'ltdwa' || key === 'world' || key === 'drought' || key === 'northern' || key === 'reserves') {
           updateLtdwaBanner();
-          if (state.rankMode === 'need' || state.rankMode === 'world' || state.rankMode === 'fit') updateRankList();
+          if (state.rankMode === 'need' || state.rankMode === 'world' || state.rankMode === 'fit' || state.rankMode === 'markets') updateRankList();
           if (state.layers.solar) updateStats();
         }
         if (key === 'solar') {
@@ -326,6 +335,13 @@
         updateRankList();
       });
     });
+
+    document.querySelectorAll('.filter-chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        applyFocusFilter(btn.dataset.filter || 'all');
+      });
+    });
+    syncFilterChips();
 
     initMobileChrome();
     updateLtdwaBanner();
@@ -418,6 +434,54 @@
     return tokens.every(function (t) { return hay.indexOf(t) !== -1; });
   }
 
+  function syncFilterChips() {
+    document.querySelectorAll('.filter-chip').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.filter === state.filter);
+    });
+  }
+
+  function syncLayerCheckboxes() {
+    ['yield', 'humidity', 'dewpoint', 'reserves', 'otherFn', 'ltdwa', 'world', 'drought', 'northern', 'solar'].forEach(function (key) {
+      const id = key === 'otherFn' ? 'layer-other-fn' : ('layer-' + key);
+      const el = document.getElementById(id);
+      if (el && state.layers[key] != null) el.checked = !!state.layers[key];
+    });
+  }
+
+  /** Compact focus chips: All / Need only / Markets only / High fit */
+  function applyFocusFilter(filter) {
+    state.filter = filter || 'all';
+    if (state.filter === 'need') {
+      state.layers.ltdwa = true;
+      state.layers.world = true;
+      state.layers.drought = false;
+    } else if (state.filter === 'markets') {
+      state.layers.ltdwa = false;
+      state.layers.world = false;
+      state.layers.drought = true;
+    } else if (state.filter === 'highfit') {
+      state.layers.ltdwa = true;
+      state.layers.world = true;
+      state.layers.drought = false;
+    } else {
+      state.filter = 'all';
+      state.layers.ltdwa = true;
+      state.layers.world = true;
+      state.layers.drought = true;
+    }
+    syncFilterChips();
+    syncLayerCheckboxes();
+    updateLtdwaBanner();
+    updateRankList();
+    applyLayers();
+  }
+
+  function passesHighFit(c) {
+    if (state.filter !== 'highfit') return true;
+    const score = (c.fit && c.fit.score != null) ? c.fit.score : 0;
+    return score >= 45;
+  }
+
   function searchLocations(rawQuery) {
     const q = normSearch(rawQuery);
     if (!q || q.length < 1) return [];
@@ -447,6 +511,20 @@
           id: c.id,
           name: c.name,
           meta: [(c.country || ''), (c.people || ''), (c.issue || '')].filter(Boolean).join(' · '),
+          score: (normSearch(c.name).indexOf(q) === 0 ? 0 : 1),
+        });
+      }
+    }
+
+    // Drought / arid commercial markets
+    for (let i = 0; i < enrichedDrought.length && out.length < limit; i++) {
+      const c = enrichedDrought[i];
+      if (haystackMatch(q, [c.name, c.country, c.region, c.drought, c.why, c.yieldHint, 'drought', 'market', 'arid'])) {
+        out.push({
+          kind: 'drought',
+          id: c.id,
+          name: c.name,
+          meta: [(c.country || ''), (c.region || ''), 'T' + c.tier + ' market', (c.drought || '')].filter(Boolean).join(' · '),
           score: (normSearch(c.name).indexOf(q) === 0 ? 0 : 1),
         });
       }
@@ -495,7 +573,7 @@
     const q = normSearch(query);
     if (!q) {
       box.innerHTML = '';
-      if (hint) hint.textContent = 'Type to find water-need sites, reserves, or yield cities.';
+      if (hint) hint.textContent = 'Type to find markets, water-need sites, reserves, or yield cities.';
       return;
     }
     const results = searchLocations(q);
@@ -505,7 +583,7 @@
       return;
     }
     if (hint) hint.textContent = results.length + ' result' + (results.length === 1 ? '' : 's');
-    const badge = { need: 'Need', world: 'World', reserve: 'Reserve', city: 'City' };
+    const badge = { need: 'Need', world: 'World', drought: 'Market', reserve: 'Reserve', city: 'City' };
     box.innerHTML = results.map(function (r) {
       return '<button type="button" class="search-result" role="option" data-kind="' + r.kind + '" data-id="' + escapeHtml(r.id) + '">' +
         '<span class="search-badge ' + r.kind + '">' + badge[r.kind] + '</span>' +
@@ -525,6 +603,7 @@
     closeSheets();
     if (kind === 'need') focusFn(id);
     else if (kind === 'world') focusWorld(id);
+    else if (kind === 'drought') focusDrought(id);
     else if (kind === 'reserve') focusReserve(id);
     else if (kind === 'city') focusCity(id);
   }
@@ -651,6 +730,9 @@
         if (showWorld) {
           noteTxt += ' · Amber world need pins (' + (getWorldMeta().count || enrichedWorld.length || getWorldRaw().length) + ')';
         }
+        if (state.layers.drought) {
+          noteTxt += ' · Teal market pins (' + (getDroughtMeta().count || enrichedDrought.length || getDroughtRaw().length) + ')';
+        }
         note.textContent = noteTxt;
       }
     }
@@ -717,6 +799,24 @@
     return 'fit-lo';
   }
 
+  /** Commercial market proxy: fixed modest demand + modeled yield suitability. */
+  function commercialFitFor(c) {
+    const need01 = 0.35; // market-demand proxy — not advisory need
+    const yMid = (c.yield && c.yield.yieldMid != null) ? +c.yield.yieldMid : 0;
+    const yield01 = Math.max(0, Math.min(1, yMid / 14));
+    const score = Math.round(Math.sqrt(need01 * yield01) * 100);
+    let label;
+    if (score >= 55) label = 'Strong market climate';
+    else if (score >= 40) label = 'Workable market climate';
+    else label = 'Modest market climate';
+    const hint = c.yieldHint || '';
+    let blurb = 'Buy-market overlay: drought / arid residential demand — not an advisory-need pin.';
+    if (hint === 'high') blurb = 'Commercial beachhead where modeled climate looks productive vs DEWFALL design band.';
+    else if (hint === 'strong') blurb = 'Strong arid demand market; yield model is workable — prioritize early sales conversations.';
+    else if (hint === 'moderate') blurb = 'Arid demand is real; modeled L/day is moderate — still a beachhead, not a need site.';
+    return { score, label, blurb, need01, yield01, yMid };
+  }
+
   function sitePermalink(id) {
     let base;
     if (/donnyjm\.github\.io/i.test(location.hostname)) {
@@ -756,12 +856,28 @@
 
   function siteCardText(c) {
     const y = c.yield || {};
-    const fit = c.fit || fitScoreFor(c);
     const sol = c.solar || solarForEntity(c);
-    const issue = c.issue || advisoryLabel(c.advisoryTypeRaw || c.advisoryType) || 'documented water access gap';
-    const src = c.source || (c.world ? (getWorldMeta().sourceLabel || 'curated list') : (FN_META.sourceLabel || 'ISC / FNHA'));
     const srcUrl = c.sourceUrl ? (' ' + c.sourceUrl) : '';
     const untapped = sol && sol.untappedKWhYear != null ? formatKWh(sol.untappedKWhYear) : '—';
+    if (c.kind === 'drought' || (c.id && String(c.id).indexOf('drought-') === 0)) {
+      const fit = c.fit || commercialFitFor(c);
+      const src = c.source || (getDroughtMeta().sourceLabel || 'drought markets');
+      return [
+        'DEWFALL market card — ' + (c.name || 'market'),
+        siteXmlocation(c),
+        'MARKET · drought / arid demand (commercial beachhead)',
+        'Tier ' + (c.tier || '?') + ' · ' + (c.drought || 'arid') + ' · ' + (c.why || ''),
+        'Commercial fit: ' + fit.score + ' · ' + fit.label,
+        'Modeled yield (' + state.season + '): ' + y.yieldLo + '–' + y.yieldHi + ' L/day (model estimate)',
+        'Solar untapped (TEC branch): ' + untapped + ' model',
+        'Source: ' + src + srcUrl,
+        'Map: ' + sitePermalink(c.id),
+        '— Mekilok / DEWFALL · buy market, not advisory-need · model estimates only'
+      ].join('\n');
+    }
+    const fit = c.fit || fitScoreFor(c);
+    const issue = c.issue || advisoryLabel(c.advisoryTypeRaw || c.advisoryType) || 'documented water access gap';
+    const src = c.source || (c.world ? (getWorldMeta().sourceLabel || 'curated list') : (FN_META.sourceLabel || 'ISC / FNHA'));
     return [
       'DEWFALL site card — ' + (c.name || 'site'),
       siteXmlocation(c),
@@ -866,6 +982,15 @@
       focusWorld(site);
       return true;
     }
+    if (enrichedDrought.some(function (x) { return x.id === site; })) {
+      focusDrought(site);
+      return true;
+    }
+    if (getDroughtRaw().some(function (x) { return x.id === site; })) {
+      if (!enrichedDrought.length) refreshDrought();
+      focusDrought(site);
+      return true;
+    }
     if (enriched.some(function (x) { return x.id === site; })) {
       focusCity(site);
       return true;
@@ -883,6 +1008,37 @@
     if (w.kind === 'both' || w.kind === 'indigenous') s += 15;
     if (/no piped|unserved|mercury|uranium|arsenic|boil/i.test((w.issue||'') + ' ' + (w.notes||''))) s += 20;
     return s;
+  }
+
+  function refreshDrought() {
+    enrichedDrought = getDroughtRaw().map(function (m) {
+      const city = Object.assign({}, m, {
+        climate: climateStubForLat(m.lat, m.lng),
+        province: m.region || m.country,
+        remoteness: 'market',
+        market: 'drought / arid demand',
+        note: m.why,
+        source: m.source,
+        sourceUrl: m.sourceUrl,
+      });
+      // Arid SW / desert nudge: slightly drier stub for extreme/severe drought metros
+      if ((m.drought === 'extreme' || m.drought === 'severe') && city.climate && city.climate.summer) {
+        city.climate.summer.RH = Math.min(city.climate.summer.RH, 0.38);
+        city.climate.annual.RH = Math.min(city.climate.annual.RH, 0.42);
+      }
+      const e = Y.enrichCity(city, state.season);
+      e.kind = 'drought';
+      e.tier = m.tier;
+      e.drought = m.drought;
+      e.why = m.why;
+      e.yieldHint = m.yieldHint;
+      e.populationNote = m.populationNote;
+      e.country = m.country;
+      e.region = m.region;
+      e.marketKind = m.kind;
+      e.fit = commercialFitFor(e);
+      return e;
+    });
   }
 
   function refreshWorld() {
@@ -915,6 +1071,7 @@
     for (const k of Object.keys(solarCache)) delete solarCache[k];
     enriched = Y.enrichAll(CITIES, state.season);
     refreshWorld();
+    refreshDrought();
     enrichedFn = FN.map((c) => {
       const e = Y.enrichCity(c, state.season);
       e.needSignal = needSignal(c);
@@ -1021,7 +1178,28 @@
     const title = $('#rank-title');
     const sub = $('#rank-sub');
 
-    if (state.rankMode === 'fit') {
+    if (state.rankMode === 'markets') {
+      if (title) title.textContent = 'Drought / arid markets';
+      if (sub) sub.textContent = 'Commercial first beachheads · sorted by tier then modeled yield';
+      const rows = enrichedDrought.slice().sort(function (a, b) {
+        const ta = a.tier || 9, tb = b.tier || 9;
+        if (ta !== tb) return ta - tb;
+        return (b.yield.yieldMid || 0) - (a.yield.yieldMid || 0);
+      });
+      list.innerHTML = rows.map(function (c, i) {
+        const y = c.yield;
+        const fit = c.fit || { score: 0, label: '—' };
+        return '<div class="rank-item need-item drought-item' + (state.selectedId === c.id ? ' active' : '') +
+          '" data-id="' + c.id + '" data-kind="drought">' +
+          '<div class="num">' + (i + 1) + '</div>' +
+          '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
+          '<div class="city-meta">T' + c.tier + ' · ' + escapeHtml(c.country || '') + ' · ' + escapeHtml(c.drought || '') + '</div></div>' +
+          '<div class="yld need-yld">' +
+            '<span class="need-score ' + fitClass(fit.score) + '">' + fit.score + '</span>' +
+            '<span>mkt · ' + y.yieldLo + '–' + y.yieldHi + ' L est.</span>' +
+          '</div></div>';
+      }).join('');
+    } else if (state.rankMode === 'fit') {
       if (title) title.textContent = 'Need × yield fit';
       if (sub) sub.textContent = 'Need × modeled yield · higher = better DEWFALL conversation';
       const rows = enrichedFn.concat(enrichedWorld).slice().sort(function (a, b) {
@@ -1110,6 +1288,7 @@
         if (IS_MOBILE) closeSheets();
         if (el.dataset.kind === 'fn') focusFn(el.dataset.id);
         else if (el.dataset.kind === 'world') focusWorld(el.dataset.id);
+        else if (el.dataset.kind === 'drought') focusDrought(el.dataset.id);
         else focusCity(el.dataset.id);
       });
     });
@@ -1186,6 +1365,34 @@
     bumpIdle();
   }
 
+  function focusDrought(id) {
+    const c = enrichedDrought.find((x) => x.id === id);
+    if (!c || !globe) return;
+    state.selectedId = id;
+    state.selectedKind = 'drought';
+    setSiteParam(id);
+    updateRankList();
+    state.autoRotate = false;
+    if (globe.controls) {
+      try { globe.controls().autoRotate = false; } catch (e) {}
+    }
+    const rot = document.getElementById('layer-rotate');
+    if (rot) rot.checked = false;
+    applyLayers();
+    const alt = IS_MOBILE ? 0.28 : 0.32;
+    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
+    setTimeout(function () {
+      state.altitude = alt;
+      state.closeZoom = true;
+      applyLayers();
+      showDroughtTooltip(c, {
+        clientX: window.innerWidth / 2,
+        clientY: IS_MOBILE ? window.innerHeight * 0.55 : window.innerHeight / 2 - 40
+      });
+    }, 1450);
+    bumpIdle();
+  }
+
   function focusReserve(id) {
     const r = reserveById[id] || (RESERVES || []).find((x) => x.id === id);
     if (!r || !globe) return;
@@ -1221,8 +1428,25 @@
 
   function visibleFn() {
     if (!state.layers.ltdwa) return [];
-    if (!state.layers.northern) return enrichedFn;
-    return enrichedFn.filter((c) => c.remoteness === 'remote-northern' || c.highlightNorthern);
+    let rows = enrichedFn;
+    if (state.layers.northern) {
+      rows = rows.filter((c) => c.remoteness === 'remote-northern' || c.highlightNorthern);
+    }
+    if (state.filter === 'highfit') {
+      rows = rows.filter(passesHighFit);
+    }
+    return rows;
+  }
+
+  function visibleWorld() {
+    if (!state.layers.world) return [];
+    if (state.filter === 'highfit') return enrichedWorld.filter(passesHighFit);
+    return enrichedWorld;
+  }
+
+  function visibleDrought() {
+    if (!state.layers.drought) return [];
+    return enrichedDrought;
   }
 
   function applyLayers() {
@@ -1230,6 +1454,9 @@
     // Rehydrate world pins if data arrived late or first paint raced
     if (state.layers.world && !enrichedWorld.length && getWorldRaw().length) {
       refreshWorld();
+    }
+    if (state.layers.drought && !enrichedDrought.length && getDroughtRaw().length) {
+      refreshDrought();
     }
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
     const reserves = visibleReserves();
@@ -1279,8 +1506,8 @@
 
     // Tall beacon pillar for selected Water Need (Canada or world)
     // World need sites as amber pillars (backup visibility + match need language)
-    if (state.layers.world && enrichedWorld.length) {
-      enrichedWorld.forEach(function (w) {
+    if (state.layers.world) {
+      visibleWorld().forEach(function (w) {
         pts.push({
           kind: 'world-need',
           id: w.id,
@@ -1317,6 +1544,20 @@
           yield: { yieldMid: 1 },
           _world: sel,
           beaconColor: '#ff6ad5',
+        });
+      }
+    }
+    if (state.selectedKind === 'drought' && state.selectedId) {
+      const sel = enrichedDrought.find((x) => x.id === state.selectedId);
+      if (sel) {
+        pts.push({
+          kind: 'need-beacon',
+          id: 'beacon-drought-' + sel.id,
+          lat: sel.lat,
+          lng: sel.lng,
+          yield: { yieldMid: 1 },
+          _drought: sel,
+          beaconColor: '#3ec8d4',
         });
       }
     }
@@ -1369,6 +1610,7 @@
           if (!d) return;
           if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
           else if (d.kind === 'need-beacon' && d._world) focusWorld(d._world.id);
+          else if (d.kind === 'need-beacon' && d._drought) focusDrought(d._drought.id);
           else if (d.kind === 'world-need' && d._world) focusWorld(d._world.id);
           else if (d.kind === 'world-need') focusWorld(d.id);
           else if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
@@ -1450,6 +1692,23 @@
         });
       }
     }
+    if (state.layers.drought && state.selectedKind === 'drought' && state.selectedId) {
+      const sel = enrichedDrought.find((c) => c.id === state.selectedId);
+      if (sel) {
+        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
+          mist.push({
+            lat: sel.lat,
+            lng: sel.lng,
+            maxR: maxR,
+            propagationSpeed: 0.9 + i * 0.25,
+            repeatPeriod: 700 + i * 200,
+            color: function () {
+              return i === 0 ? 'rgba(120, 240, 255, 0.85)' : 'rgba(62, 200, 212, 0.5)';
+            },
+          });
+        });
+      }
+    }
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
       .ringMaxRadius('maxR')
@@ -1471,9 +1730,15 @@
       });
     }
     if (state.layers.world) {
-      enrichedWorld.forEach((w) => {
+      visibleWorld().forEach((w) => {
         const selected = state.selectedKind === 'world' && state.selectedId === w.id;
         htmlItems.push({ kind: 'world', lat: w.lat, lng: w.lng, city: w, selected: selected });
+      });
+    }
+    if (state.layers.drought) {
+      visibleDrought().forEach((m) => {
+        const selected = state.selectedKind === 'drought' && state.selectedId === m.id;
+        htmlItems.push({ kind: 'drought', lat: m.lat, lng: m.lng, city: m, selected: selected });
       });
     }
 
@@ -1489,6 +1754,7 @@
             return el;
           }
           if (d.kind === 'world') return makeWorldPin(d.city);
+          if (d.kind === 'drought') return makeDroughtPin(d.city);
           return makeFnPin(d.city);
         });
     } else {
@@ -1593,6 +1859,44 @@
     return el;
   }
 
+  function makeDroughtPin(c) {
+    const isSelected = state.selectedKind === 'drought' && state.selectedId === c.id;
+    const tier = c.tier || 3;
+    const el = document.createElement('div');
+    el.className = 'drought-pin tier-' + tier + (isSelected ? ' selected' : '');
+    el.title = '';
+    if (isSelected) {
+      const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
+      el.innerHTML = '<span class="drought-pin-beacon"></span><span class="drought-pin-diamond"></span><span class="drought-pin-label drought-pin-label-selected">' +
+        escapeHtml(shortName(c.name)) + fitBit + '</span>';
+    } else {
+      el.innerHTML = '<span class="drought-pin-diamond"></span>';
+    }
+    if (!IS_MOBILE) {
+      el.addEventListener('mouseenter', (ev) => {
+        showDroughtTooltip(c, ev);
+        document.body.style.cursor = 'pointer';
+        bumpIdle();
+      });
+      el.addEventListener('mouseleave', () => {
+        hideTooltip();
+        document.body.style.cursor = 'default';
+      });
+    }
+    function openDrought(ev) {
+      if (ev) {
+        ev.stopPropagation();
+        if (ev.cancelable) ev.preventDefault();
+      }
+      focusDrought(c.id);
+    }
+    el.addEventListener('click', openDrought);
+    el.addEventListener('touchend', function (ev) {
+      openDrought(ev);
+    }, { passive: false });
+    return el;
+  }
+
   function onPointHover(d, ev) {
     if (d) {
       if (d.kind === 'reserve') {
@@ -1620,7 +1924,7 @@
   function showCityTooltip(c, ev) {
     const y = c.yield;
     const badgeClass = 's' + y.score;
-    tooltipEl.classList.remove('need-card', 'reserve-card');
+    tooltipEl.classList.remove('need-card', 'reserve-card', 'world-card', 'drought-card');
     setTooltipHtml(
       '<div class="tc-head">' +
         '<h3>' + escapeHtml(c.name) + '</h3>' +
@@ -1649,7 +1953,7 @@
   }
 
   function showReserveTooltip(r, ev) {
-    tooltipEl.classList.remove('need-card');
+    tooltipEl.classList.remove('need-card', 'world-card', 'drought-card');
     tooltipEl.classList.add('reserve-card');
     // names/info only via hover tooltip / mobile sheet
     const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
@@ -1693,7 +1997,7 @@
       ? '<div class="sub">Reserve match: ' + escapeHtml(reserveCtx.name) + ' (' + escapeHtml(reserveCtx.type || 'IR') + ')</div>'
       : '';
 
-    tooltipEl.classList.remove('reserve-card');
+    tooltipEl.classList.remove('reserve-card', 'world-card', 'drought-card');
     tooltipEl.classList.add('need-card');
     setTooltipHtml(
       '<div class="tc-head need-head">' +
@@ -1749,7 +2053,7 @@
       ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
       : escapeHtml(c.source || getWorldMeta().sourceLabel || 'curated list');
 
-    tooltipEl.classList.remove('reserve-card');
+    tooltipEl.classList.remove('reserve-card', 'drought-card');
     tooltipEl.classList.add('need-card', 'world-card');
     setTooltipHtml(
       '<div class="tc-head need-head">' +
@@ -1779,6 +2083,55 @@
         '</div>' +
         '<div class="est-tag">' +
           'Source: ' + srcHtml + '. Curated global list; not exhaustive; Canada FN on separate layer; centroids approximate. Model estimate · ' + escapeHtml(state.season) + ' bin.' +
+        '</div>' +
+        shareRowHtml() +
+      '</div>');
+    wireShareButtons(c);
+    pinTooltip(ev);
+  }
+
+  function showDroughtTooltip(c, ev) {
+    const y = c.yield;
+    const fit = c.fit || commercialFitFor(c);
+    if (!c.fit) c.fit = fit;
+    const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
+    const srcHtml = c.sourceUrl
+      ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
+      : escapeHtml(c.source || getDroughtMeta().sourceLabel || 'drought markets');
+    const pop = c.populationNote ? escapeHtml(c.populationNote) : '—';
+    const tierBadge = '<span class="badge drought-tier">Tier ' + escapeHtml(String(c.tier || '?')) + '</span>';
+    const droughtBadge = '<span class="badge drought-badge">' + escapeHtml(String(c.drought || 'arid')) + '</span>';
+
+    tooltipEl.classList.remove('need-card', 'reserve-card', 'world-card');
+    tooltipEl.classList.add('drought-card');
+    setTooltipHtml(
+      '<div class="tc-head drought-head">' +
+        '<div class="need-kicker drought-kicker">MARKET · drought / arid demand — commercial first beachhead</div>' +
+        '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
+        '<div class="sub">' + region + '</div>' +
+        tierBadge + ' ' + droughtBadge +
+        ' <span class="badge market-badge">Buy market</span>' +
+      '</div>' +
+      '<div class="tc-grid">' +
+        fitScoreCellHtml(fit) +
+        '<div class="tc-cell"><div class="k">Population</div><div class="v">' + pop + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Yield hint</div><div class="v">' + escapeHtml(c.yieldHint || '—') + '</div></div>' +
+        '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
+          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
+        '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
+        '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
+      '</div>' +
+      '<div class="tc-body">' +
+        '<div class="fit-blurb">' + escapeHtml(c.why || fit.blurb) + '</div>' +
+        '<div class="why cold-caveat">This is a buy market, not an advisory-need pin. Teal diamonds mark commercial drought / arid demand — distinct from amber Indigenous / BWA need sites.</div>' +
+        solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
+        '<div class="tc-breakdown">' +
+          '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>Commercial fit: <strong>' + fit.score + '</strong></span>' +
+        '</div>' +
+        '<div class="est-tag">' +
+          'Source: ' + srcHtml + '. Curated commercial first-market list; centroids approximate; not water-advisory sites. Model estimate · ' + escapeHtml(state.season) + ' bin.' +
         '</div>' +
         shareRowHtml() +
       '</div>');
@@ -1977,6 +2330,9 @@
     else console.info("DEWFALL need layer:", FN.length, "communities (" + FN.filter(function (c) { return c.term === "long"; }).length + " long · " + FN.filter(function (c) { return c.term === "short"; }).length + " short)");
     if (!RESERVES.length) console.warn("DEWFALL: FN reserves data not loaded");
     else console.info("[DEWFALL] reserves loaded:", RESERVES.length, RES_META.dedupedCountsByType || {});
+    const dm = getDroughtRaw();
+    if (!dm.length) console.warn("DEWFALL: drought markets data not loaded");
+    else console.info("[DEWFALL] drought markets:", dm.length, getDroughtMeta().sourceLabel || "");
     try {
       initUI();
       bootGlobe();
