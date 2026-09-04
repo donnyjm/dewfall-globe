@@ -95,7 +95,7 @@
   };
 
   const state = {
-    season: 'annual',
+    season: 'summer',
     layers: {
       yield: true,
       humidity: !IS_MOBILE,   // mist/rings choke mobile WebGL — off by default on phone
