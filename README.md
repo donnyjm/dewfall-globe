@@ -28,8 +28,21 @@ A static server is required so CDN libraries and modules load correctly (avoid `
 - Fridge-core vs TEC/sorbent breakdown + qualitative score (1–5)
 - Dark coastal/tech UI, DEWFALL branding, fullscreen responsive
 - Auto-rotate when idle; orbit / zoom / drag
-- ISC First Nations **LTDWA need** layer (amber/red pins, distinct from cyan yield pillars)
+- **All First Nations reserves** nationwide (NRCan Aboriginal Lands — Indian Reserves), silver hexbin/dots
+- ISC First Nations **LTDWA need** layer (amber/red pins on top, distinct from cyan yield pillars)
 
+
+
+
+## First Nations reserves (nationwide)
+
+Toggle **All First Nations reserves** (default ON) to show NRCan **Aboriginal Lands of Canada Legislative Boundaries** centroids for Indian Reserves (IR) across Canada.
+
+- Data file: `data/fn-reserves.js` (~2,200+ deduped IR pins + optional FN settlement types).
+- Optional **Other FN settlement lands**: Sechelt (SHL), Cree/Naskapi (CRN), Salt River (SRN), Yukon FN (YFN), Indian Land (IL). Excludes Inuit Owned Land (IOL) and similar by default.
+- At world/continent zoom: hexbin aggregation for GPU performance; zoom in for individual silver pins.
+- Amber/red LTDWA need pins stay larger and on top. Fuzzy name + geo match marks `hasLtdwa` where possible.
+- Attribution: **NRCan ALC Legislative Boundaries** + **ISC LTDWA**.
 
 ## First Nations LTDWA need layer
 

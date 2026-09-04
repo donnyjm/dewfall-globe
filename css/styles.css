@@ -694,3 +694,43 @@ html, body {
 @media (max-width: 900px) {
   .ltdwa-banner { top: 58px; font-size: 10.5px; }
 }
+
+
+/* —— All-reserves layer —— */
+.toggle-reserve { color: #d0d8e0 !important; }
+.need-swatch.reserve {
+  background: #d8e0e8;
+  box-shadow: 0 0 6px rgba(220,230,240,0.45);
+}
+.product-strip .attr {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #6a8090;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 6px;
+}
+.tooltip-card.reserve-card {
+  width: 320px;
+  border-color: rgba(180,200,220,0.35);
+}
+.tooltip-card .reserve-head {
+  background: linear-gradient(135deg, rgba(180,200,220,0.12), transparent);
+}
+.reserve-kicker {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8c8d8;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+.tooltip-card .badge.reserve-badge {
+  background: rgba(180,200,220,0.15);
+  color: #d0dce8;
+  border-color: rgba(180,200,220,0.35);
+}
+.tooltip-card .badge.ltdwa-link {
+  background: rgba(255,140,50,0.18);
+  color: #ffb060;
+  border-color: rgba(255,160,64,0.4);
+}

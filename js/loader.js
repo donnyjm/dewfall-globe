@@ -14,6 +14,7 @@
     'js/yield.js',
     { src: 'data/fn-ltdwa.js', optional: true },
     { src: 'js/fn-ltdwa.js', optional: true },
+    { src: 'data/fn-reserves.js', optional: true },
     'js/app.js'
   ];
 

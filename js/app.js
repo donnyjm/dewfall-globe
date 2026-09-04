@@ -1,7 +1,7 @@
 /**
  * DEWFALL Globe — interactive photorealistic Earth visualization
  * Uses globe.gl (Three.js) + curated climate normals + transparent yield model
- * + ISC First Nations LTDWA need layer (distinct from yield pillars).
+ * + NRCan First Nations reserves nationwide + ISC LTDWA need layer.
  */
 (function () {
   'use strict';
@@ -10,6 +10,11 @@
   const CITIES = window.DEWFALL_CITIES;
   const FN = window.DEWFALL_FN_LTDWA || [];
   const FN_META = window.DEWFALL_FN_LTDWA_META || {};
+  const RESERVES = window.DEWFALL_FN_RESERVES || [];
+  const RES_META = window.DEWFALL_FN_RESERVES_META || {};
+
+  const DEFAULT_RESERVE_TYPES = new Set(RES_META.defaultTypes || ['IR']);
+  const OPTIONAL_RESERVE_TYPES = new Set(RES_META.optionalTypes || ['IL', 'SHL', 'CRN', 'SRN', 'YFN']);
 
   const REMOTE_WEIGHT = {
     'remote-northern': 3.0,
@@ -20,18 +25,30 @@
 
   const state = {
     season: 'annual',
-    layers: { yield: true, humidity: true, dewpoint: false, ltdwa: true, northern: false },
+    layers: {
+      yield: true,
+      humidity: true,
+      dewpoint: false,
+      reserves: true,
+      otherFn: false,
+      ltdwa: true,
+      northern: false,
+    },
     autoRotate: true,
     selectedId: null,
     selectedKind: null,
     rankMode: 'yield',
     idleTimer: null,
+    closeZoom: false,
+    altitude: 1.9,
   };
 
   let globe = null;
   let enriched = [];
   let enrichedFn = [];
+  let fnById = {};
   let tooltipEl = null;
+  let zoomRaf = null;
 
   const $ = (s) => document.querySelector(s);
 
@@ -41,8 +58,30 @@
     return homes * w;
   }
 
+  function visibleReserves() {
+    if (!state.layers.reserves) return [];
+    return RESERVES.filter((r) => {
+      if (DEFAULT_RESERVE_TYPES.has(r.type)) return true;
+      if (state.layers.otherFn && OPTIONAL_RESERVE_TYPES.has(r.type)) return true;
+      return false;
+    });
+  }
+
+  function reserveCountLabel() {
+    const all = visibleReserves();
+    const ir = all.filter((r) => r.type === 'IR').length;
+    const other = all.length - ir;
+    const matched = all.filter((r) => r.hasLtdwa).length;
+    let s = ir + ' Indian Reserves';
+    if (other > 0) s += ' + ' + other + ' other FN lands';
+    s += ' · ' + (FN.length || 38) + ' with active LTDWA (ISC Aug 2026)';
+    if (matched) s += ' · ' + matched + ' name-matched';
+    return s;
+  }
+
   function initUI() {
     tooltipEl = $('#tooltip');
+    FN.forEach((c) => { fnById[c.id] = c; });
 
     document.querySelectorAll('[data-season]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -53,19 +92,29 @@
       });
     });
 
-    ['yield', 'humidity', 'dewpoint', 'ltdwa', 'northern'].forEach((key) => {
-      const el = $('#layer-' + key);
+    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'northern'].forEach((key) => {
+      const el = $('#layer-' + (key === 'reserves' ? 'reserves' : key));
       if (!el) return;
       el.checked = !!state.layers[key];
       el.addEventListener('change', () => {
         state.layers[key] = el.checked;
-        if (key === 'ltdwa' || key === 'northern') {
+        if (key === 'ltdwa' || key === 'northern' || key === 'reserves') {
           updateLtdwaBanner();
           if (state.rankMode === 'need') updateRankList();
         }
         applyLayers();
       });
     });
+
+    const otherEl = $('#layer-other-fn');
+    if (otherEl) {
+      otherEl.checked = !!state.layers.otherFn;
+      otherEl.addEventListener('change', () => {
+        state.layers.otherFn = otherEl.checked;
+        updateLtdwaBanner();
+        applyLayers();
+      });
+    }
 
     const rot = $('#layer-rotate');
     if (rot) {
@@ -91,9 +140,30 @@
   function updateLtdwaBanner() {
     const el = $('#ltdwa-banner');
     if (!el) return;
-    el.classList.toggle('dim', !state.layers.ltdwa);
-    if (state.layers.northern) el.classList.add("northern-on");
-    else el.classList.remove("northern-on");
+    const title = $('#banner-title');
+    const stats = $('#banner-stats');
+    const note = $('#banner-note');
+    const showRes = state.layers.reserves;
+    const showNeed = state.layers.ltdwa;
+    el.classList.toggle('dim', !showRes && !showNeed);
+    if (state.layers.northern) el.classList.add('northern-on');
+    else el.classList.remove('northern-on');
+    if (title) {
+      if (showRes && showNeed) title.textContent = 'First Nations reserves + LTDWA need';
+      else if (showRes) title.textContent = 'First Nations reserves (NRCan)';
+      else if (showNeed) title.textContent = 'First Nations LTDWA need';
+      else title.textContent = 'First Nations layers off';
+    }
+    if (stats) {
+      if (showRes) stats.textContent = '· ' + reserveCountLabel();
+      else if (showNeed) stats.textContent = '· ' + (FN.length || 38) + ' communities · ISC Aug 2026';
+      else stats.textContent = '';
+    }
+    if (note) {
+      note.textContent = showRes
+        ? 'Silver = all IR (NRCan ALC) · Amber/red = active LTDWA need · need ≠ high yield'
+        : 'Need sites ≠ high yield · northern cold → lower L/day';
+    }
   }
 
   function refresh() {
@@ -106,6 +176,7 @@
     });
     updateStats();
     updateRankList();
+    updateLtdwaBanner();
     applyLayers();
   }
 
@@ -222,6 +293,22 @@
     bumpIdle();
   }
 
+  function focusReserve(id) {
+    const r = RESERVES.find((x) => x.id === id);
+    if (!r || !globe) return;
+    state.selectedId = id;
+    state.selectedKind = 'reserve';
+    globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 1.45 }, 1100);
+    if (r.hasLtdwa && r.ltdwaId && fnById[r.ltdwaId]) {
+      const c = enrichedFn.find((x) => x.id === r.ltdwaId) || Y.enrichCity(fnById[r.ltdwaId], state.season);
+      if (c && !c.needSignal) c.needSignal = needSignal(fnById[r.ltdwaId]);
+      showFnTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 }, r);
+    } else {
+      showReserveTooltip(r, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
+    }
+    bumpIdle();
+  }
+
   function coldClimateCaveat(c) {
     if (c.remoteness === 'remote-northern' || (c.lat && c.lat >= 53) || c.highlightNorthern) {
       return 'Cold / northern climate: refrigeration AWG L/day is typically MUCH lower than warm-humid markets. Model yield below is an honest local-climate estimate \u2014 not a high-production pitch.';
@@ -241,23 +328,106 @@
   function applyLayers() {
     if (!globe) return;
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
+    const reserves = visibleReserves();
+    const useHex = state.layers.reserves && !state.closeZoom && reserves.length > 0;
+    const useReservePts = state.layers.reserves && state.closeZoom && reserves.length > 0;
 
+    // Yield pillars (+ individual reserve dots when zoomed in)
+    const pts = [];
     if (state.layers.yield && enriched.length) {
+      enriched.forEach((c) => {
+        pts.push({
+          kind: 'city',
+          id: c.id,
+          lat: c.lat,
+          lng: c.lng,
+          yield: c.yield,
+          name: c.name,
+          region: c.region,
+          market: c.market,
+          _city: c,
+        });
+      });
+    }
+    if (useReservePts) {
+      // Skip reserves that already have a larger LTDWA pin to reduce clutter
+      reserves.forEach((r) => {
+        if (r.hasLtdwa && state.layers.ltdwa) return;
+        pts.push({
+          kind: 'reserve',
+          id: r.id,
+          lat: r.lat,
+          lng: r.lng,
+          name: r.name,
+          type: r.type,
+          typeLabel: r.typeLabel,
+          province: r.province,
+          hasLtdwa: !!r.hasLtdwa,
+          ltdwaId: r.ltdwaId,
+          _res: r,
+        });
+      });
+    }
+
+    if (pts.length) {
       globe
-        .pointsData(enriched)
+        .pointsData(pts)
         .pointLat('lat')
         .pointLng('lng')
-        .pointAltitude((d) => 0.01 + (d.yield.yieldMid / maxY) * 0.22)
-        .pointRadius((d) => 0.28 + (d.yield.yieldMid / maxY) * 0.55)
-        .pointColor((d) => Y.yieldColor(d.yield.yieldMid, maxY))
-        .pointsMerge(false)
+        .pointAltitude((d) => {
+          if (d.kind === 'reserve') return 0.004;
+          return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
+        })
+        .pointRadius((d) => {
+          if (d.kind === 'reserve') return 0.11;
+          return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
+        })
+        .pointColor((d) => {
+          if (d.kind === 'reserve') {
+            return d.hasLtdwa ? 'rgba(255, 180, 100, 0.55)' : 'rgba(220, 230, 240, 0.55)';
+          }
+          return Y.yieldColor(d.yield.yieldMid, maxY);
+        })
+        .pointsMerge(useReservePts && !state.layers.yield && pts.length > 500)
         .pointLabel(() => '')
         .onPointHover(onPointHover)
-        .onPointClick((d) => { if (d) focusCity(d.id); });
+        .onPointClick((d) => {
+          if (!d) return;
+          if (d.kind === 'reserve') focusReserve(d.id);
+          else focusCity(d.id);
+        });
     } else {
       globe.pointsData([]);
     }
 
+    // Hexbin for reserves at world / continent view (GPU-friendly)
+    if (useHex) {
+      const hexRes = state.altitude > 2.4 ? 3 : 4;
+      globe
+        .hexBinPointsData(reserves)
+        .hexBinPointLat('lat')
+        .hexBinPointLng('lng')
+        .hexBinPointWeight(() => 1)
+        .hexBinResolution(hexRes)
+        .hexTopColor((d) => {
+          const n = d.sumWeight || 1;
+          const a = Math.min(0.55, 0.18 + n * 0.04);
+          return 'rgba(210, 220, 230, ' + a + ')';
+        })
+        .hexSideColor(() => 'rgba(160, 175, 190, 0.12)')
+        .hexAltitude((d) => 0.002 + Math.min(0.035, (d.sumWeight || 1) * 0.0025))
+        .hexLabel((d) => (d.sumWeight || 0) + ' reserves')
+        .onHexClick((d) => {
+          if (!d || !d.points || !d.points.length) return;
+          // Fly toward densest / first point in bin
+          const p = d.points[0];
+          if (p && p.id) focusReserve(p.id);
+        });
+    } else {
+      globe.hexBinPointsData([]);
+    }
+
+    // Humidity rings + northern LTDWA pulses
     const mist = [];
     if (state.layers.humidity && enriched.length) {
       enriched.filter((c) => c.yield.AH >= 8).forEach((c) => {
@@ -300,6 +470,7 @@
       .ringRepeatPeriod('repeatPeriod')
       .ringColor('color');
 
+    // HTML: dewpoint labels + LTDWA need pins (always on top, larger)
     const htmlItems = [];
     if (state.layers.dewpoint && enriched.length) {
       enriched.forEach((c) => {
@@ -366,7 +537,11 @@
 
   function onPointHover(d, ev) {
     if (d) {
-      showCityTooltip(d, ev);
+      if (d.kind === 'reserve') {
+        showReserveTooltip(d._res || d, ev);
+      } else {
+        showCityTooltip(d._city || d, ev);
+      }
       document.body.style.cursor = 'pointer';
     } else {
       hideTooltip();
@@ -378,7 +553,7 @@
   function showCityTooltip(c, ev) {
     const y = c.yield;
     const badgeClass = 's' + y.score;
-    tooltipEl.classList.remove('need-card');
+    tooltipEl.classList.remove('need-card', 'reserve-card');
     tooltipEl.innerHTML =
       '<div class="tc-head">' +
         '<h3>' + escapeHtml(c.name) + '</h3>' +
@@ -406,7 +581,32 @@
     tooltipEl.classList.add('visible');
   }
 
-  function showFnTooltip(c, ev) {
+  function showReserveTooltip(r, ev) {
+    tooltipEl.classList.remove('need-card');
+    tooltipEl.classList.add('reserve-card');
+    const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
+    const badge = ltdwa
+      ? '<span class="badge ltdwa-link">On active LTDWA list</span>'
+      : '<span class="badge reserve-badge">No active LTDWA on ISC list</span>';
+    tooltipEl.innerHTML =
+      '<div class="tc-head reserve-head">' +
+        '<div class="reserve-kicker">First Nations land \u00b7 NRCan ALC</div>' +
+        '<h3>' + escapeHtml(r.name) + '</h3>' +
+        (r.alt ? '<div class="sub">' + escapeHtml(r.alt) + '</div>' : '') +
+        '<div class="sub">' + escapeHtml(r.province || '') + ' \u00b7 ' + escapeHtml(r.typeLabel || r.type || 'IR') + '</div>' +
+        badge +
+      '</div>' +
+      '<div class="tc-body">' +
+        (ltdwa
+          ? '<div class="why">Matched to ISC LTDWA community: <strong>' + escapeHtml(ltdwa.name) + '</strong>. Click the amber need pin for advisory details.</div>'
+          : '<div class="why">Indian Reserve / FN land centroid. Not on the current ISC federal public-system LTDWA list (list changes; private wells &amp; territorial systems may still have advisories).</div>') +
+        '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA.</div>' +
+      '</div>';
+    positionTooltip(ev);
+    tooltipEl.classList.add('visible');
+  }
+
+  function showFnTooltip(c, ev, reserveCtx) {
     const y = c.yield;
     const homes = c.homes != null ? String(c.homes) : (c.homesImpactNote || 'see systems');
     const since = c.longTermSince || 'long-standing / see ISC';
@@ -415,13 +615,18 @@
     const badge = c.advisoryType === 'DNC' ? 'dnc' : 'bwa';
     const northTag = (c.remoteness === 'remote-northern' || c.highlightNorthern)
       ? '<span class="badge north-badge">Northern remote</span>' : '';
+    const resLine = reserveCtx
+      ? '<div class="sub">Reserve match: ' + escapeHtml(reserveCtx.name) + ' (' + escapeHtml(reserveCtx.type || 'IR') + ')</div>'
+      : '';
 
+    tooltipEl.classList.remove('reserve-card');
     tooltipEl.classList.add('need-card');
     tooltipEl.innerHTML =
       '<div class="tc-head need-head">' +
         '<div class="need-kicker">NEED \u00b7 water access \u2014 not a high-yield site</div>' +
         '<h3>' + escapeHtml(c.name) + '</h3>' +
         alt +
+        resLine +
         '<div class="sub">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(c.remoteness) + '</div>' +
         '<span class="badge ' + badge + '">' + escapeHtml(advisoryLabel(c.advisoryType)) + '</span> ' +
         northTag +
@@ -446,7 +651,7 @@
         '<div class="est-tag">' +
           'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC LTDWA') + '. ' +
           'List changes. Federal public-system LTDWAs only \u2014 not all private wells, short-term advisories, or territorial systems. ' +
-          'BC/AB/QC/Atlantic currently 0 on this ISC list. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin.' +
+          'Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin.' +
         '</div>' +
       '</div>';
     positionTooltip(ev);
@@ -481,6 +686,21 @@
     }, 8000);
   }
 
+  function syncZoomMode() {
+    if (!globe) return;
+    const pov = globe.pointOfView();
+    const alt = pov && pov.altitude != null ? pov.altitude : state.altitude;
+    state.altitude = alt;
+    const close = alt < 1.85;
+    // Hex resolution band: only rebuild when crossing coarse/fine threshold
+    const hexBand = alt > 2.4 ? 3 : 4;
+    if (close !== state.closeZoom || (!close && state._hexBand !== hexBand)) {
+      state.closeZoom = close;
+      state._hexBand = hexBand;
+      applyLayers();
+    }
+  }
+
   function bootGlobe() {
     const el = $("#globeViz");
     const base = "vendor/img/";
@@ -509,12 +729,21 @@
     ctrl.enableDamping = true;
     ctrl.minDistance = 120;
     ctrl.maxDistance = 800;
+    ctrl.addEventListener('change', () => {
+      if (zoomRaf) return;
+      zoomRaf = requestAnimationFrame(() => {
+        zoomRaf = null;
+        syncZoomMode();
+      });
+    });
 
     el.addEventListener("mousedown", bumpIdle);
     el.addEventListener("wheel", bumpIdle, { passive: true });
     el.addEventListener("touchstart", bumpIdle, { passive: true });
 
     globe.pointOfView({ lat: 52, lng: -92, altitude: 1.9 }, 0);
+    state.altitude = 1.9;
+    state.closeZoom = false;
     refresh();
 
     setTimeout(() => {
@@ -548,6 +777,8 @@
       return;
     }
     if (!FN.length) console.warn("DEWFALL: FN LTDWA data not loaded");
+    if (!RESERVES.length) console.warn("DEWFALL: FN reserves data not loaded");
+    else console.info("[DEWFALL] reserves loaded:", RESERVES.length, RES_META.dedupedCountsByType || {});
     try {
       initUI();
       bootGlobe();
@@ -563,4 +794,3 @@
     main();
   }
 })();
-
