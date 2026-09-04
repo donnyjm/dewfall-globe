@@ -10,7 +10,7 @@
   <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
   <title>DEWFALL · Where water falls from air</title>
-  <link rel="stylesheet" href="css/styles.css?v=1788559981" />
+  <link rel="stylesheet" href="css/styles.css?v=1788560778" />
 </head>
 <body>
   <div id="loader" class="loader" aria-live="polite">
@@ -82,6 +82,7 @@
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-reserves" checked /> All First Nations reserves</label>
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-other-fn" /> Other FN settlement lands</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> Water need (long + short)</label>
+        <label class="toggle toggle-need"><input type="checkbox" id="layer-world" checked /> World Indigenous / BWA need</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-northern" /> Northern remote highlight</label>
         <label class="toggle toggle-solar"><input type="checkbox" id="layer-solar" /> Solar potential</label>
         <label class="toggle"><input type="checkbox" id="layer-rotate" checked /> Auto-rotate</label>
@@ -96,6 +97,7 @@
         <span class="need-swatch short"></span> Short-term (gold)
         <span class="need-swatch dnc"></span> Do not consume / use
         <span class="need-swatch north"></span> Northern remote
+        <span class="need-swatch world"></span> World Indigenous / BWA (same amber pins)
       </div>
       <div class="legend-need legend-bc">BC DWAs from FNHA (Aug 2026) included in need layer</div>
       <div class="legend-solar" id="legend-solar">
@@ -105,7 +107,7 @@
         <div class="legend-need legend-bc">Irradiance model estimates — not a utility interconnection study</div>
       </div>
     </div>
-    <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
+    <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Amber world pins = curated Indigenous / BWA need outside Canada. Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
   </aside>
 
 
@@ -129,6 +131,7 @@
         <div class="rank-tabs" role="tablist">
           <button type="button" class="rank-tab active" data-rank="yield" role="tab">Yield</button>
           <button type="button" class="rank-tab" data-rank="need" role="tab">Water need</button>
+          <button type="button" class="rank-tab" data-rank="world" role="tab">World need</button>
         </div>
         <button type="button" class="sheet-close" id="close-list" aria-label="Close list">×</button>
       </div>
@@ -159,7 +162,7 @@
     <div class="tooltip-body" id="tooltip-body"></div>
   </div>
 
-  <script src="js/updater.js?v=1788559981"></script>
-  <script src="js/loader.js?v=1788559981"></script>
+  <script src="js/updater.js?v=1788560778"></script>
+  <script src="js/loader.js?v=1788560778"></script>
 </body>
 </html>

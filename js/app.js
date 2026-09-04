@@ -17,6 +17,8 @@
   const FN_BC_META = window.DEWFALL_FN_BC_META || {};
   const RESERVES = window.DEWFALL_FN_RESERVES || [];
   const RES_META = window.DEWFALL_FN_RESERVES_META || {};
+  const WORLD_RAW = window.DEWFALL_WORLD_WATER_NEED || window.WORLD_WATER_NEED || [];
+  const WORLD_META = window.DEWFALL_WORLD_WATER_NEED_META || {};
 
   /** Merge need lists: long-term wins if same community; else short / BC. */
   function normNeedName(n) {
@@ -103,6 +105,7 @@
       reserves: true,
       otherFn: false,
       ltdwa: true,
+      world: true,
       northern: false,
       solar: false,
     },
@@ -121,6 +124,7 @@
   let globe = null;
   let enriched = [];
   let enrichedFn = [];
+  let enrichedWorld = [];
   let fnById = {};
   let tooltipEl = null;
   let tooltipBodyEl = null;
@@ -265,15 +269,15 @@
       });
     });
 
-    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'northern', 'solar'].forEach((key) => {
+    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'world', 'northern', 'solar'].forEach((key) => {
       const el = $('#layer-' + (key === 'reserves' ? 'reserves' : key));
       if (!el) return;
       el.checked = !!state.layers[key];
       el.addEventListener('change', () => {
         state.layers[key] = el.checked;
-        if (key === 'ltdwa' || key === 'northern' || key === 'reserves') {
+        if (key === 'ltdwa' || key === 'world' || key === 'northern' || key === 'reserves') {
           updateLtdwaBanner();
-          if (state.rankMode === 'need') updateRankList();
+          if (state.rankMode === 'need' || state.rankMode === 'world') updateRankList();
           if (state.layers.solar) updateStats();
         }
         if (key === 'solar') {
@@ -430,6 +434,20 @@
       }
     }
 
+    // World Indigenous / BWA need
+    for (let i = 0; i < enrichedWorld.length && out.length < limit; i++) {
+      const c = enrichedWorld[i];
+      if (haystackMatch(q, [c.name, c.people, c.country, c.region, c.issue, c.notes, c.kindIssue])) {
+        out.push({
+          kind: 'world',
+          id: c.id,
+          name: c.name,
+          meta: [(c.country || ''), (c.people || ''), (c.issue || '')].filter(Boolean).join(' · '),
+          score: (normSearch(c.name).indexOf(q) === 0 ? 0 : 1),
+        });
+      }
+    }
+
     // Yield cities
     for (let i = 0; i < enriched.length && out.length < limit; i++) {
       const c = enriched[i];
@@ -483,7 +501,7 @@
       return;
     }
     if (hint) hint.textContent = results.length + ' result' + (results.length === 1 ? '' : 's');
-    const badge = { need: 'Need', reserve: 'Reserve', city: 'City' };
+    const badge = { need: 'Need', world: 'World', reserve: 'Reserve', city: 'City' };
     box.innerHTML = results.map(function (r) {
       return '<button type="button" class="search-result" role="option" data-kind="' + r.kind + '" data-id="' + escapeHtml(r.id) + '">' +
         '<span class="search-badge ' + r.kind + '">' + badge[r.kind] + '</span>' +
@@ -502,6 +520,7 @@
   function selectSearchResult(kind, id) {
     closeSheets();
     if (kind === 'need') focusFn(id);
+    else if (kind === 'world') focusWorld(id);
     else if (kind === 'reserve') focusReserve(id);
     else if (kind === 'city') focusCity(id);
   }
@@ -599,7 +618,8 @@
     const note = $('#banner-note');
     const showRes = state.layers.reserves;
     const showNeed = state.layers.ltdwa;
-    el.classList.toggle('dim', !showRes && !showNeed);
+    const showWorld = state.layers.world;
+    el.classList.toggle('dim', !showRes && !showNeed && !showWorld);
     if (state.layers.northern) el.classList.add('northern-on');
     else el.classList.remove('northern-on');
     const longN = FN.filter((c) => c.term === 'long').length;
@@ -621,16 +641,77 @@
       if (state.layers.solar) {
         note.textContent = 'Solar potential ON · reserves recolored by GHI (gold→deep orange) · untapped = modeled TEC-branch PV until DEWFALL deployed · model, not interconnection study';
       } else {
-        note.textContent = showNeed
+        let noteTxt = showNeed
           ? ('Amber/red = long-term · Gold = short-term · BC via FNHA (' + bcN + ') · need ≠ high yield')
           : 'Silver = all IR (NRCan ALC) · need layer off';
+        if (showWorld) {
+          noteTxt += ' · Magenta = world Indigenous/BWA (' + (WORLD_META.count || enrichedWorld.length || WORLD_RAW.length) + ')';
+        }
+        note.textContent = noteTxt;
       }
     }
+  }
+
+
+  function climateStubForLat(lat, lng) {
+    // Rough climate bins for model estimates only — NOT weather station data
+    const abs = Math.abs(lat || 0);
+    let annualT, summerT, winterT, rh;
+    if (abs < 15) { annualT=27; summerT=28; winterT=26; rh=0.75; }
+    else if (abs < 25) { annualT=24; summerT=28; winterT=18; rh=0.55; }
+    else if (abs < 35) { annualT=18; summerT=28; winterT=8; rh=0.45; }
+    else if (abs < 45) { annualT=10; summerT=20; winterT=-2; rh=0.65; }
+    else if (abs < 55) { annualT=4; summerT=14; winterT=-10; rh=0.70; }
+    else if (abs < 65) { annualT=-2; summerT=10; winterT=-18; rh=0.72; }
+    else { annualT=-8; summerT=6; winterT=-22; rh=0.75; }
+    // Desert SW nudge (Navajo belt)
+    if (lat > 33 && lat < 38 && lng > -112 && lng < -106) { rh = 0.35; summerT = 30; annualT = 14; winterT = 2; }
+    // N Australia tropical
+    if (lat < -10 && lat > -20 && lng > 129 && lng < 138) { rh = 0.55; summerT = 33; winterT = 18; annualT = 26; }
+    return {
+      annual: { T: annualT, RH: rh },
+      summer: { T: summerT, RH: Math.max(0.3, rh - 0.05) },
+      winter: { T: winterT, RH: Math.min(0.85, rh + 0.05) }
+    };
+  }
+
+  function worldNeedSignal(w) {
+    let s = 50;
+    if (w.term === 'chronic' || w.term === 'long') s += 25;
+    if (w.kind === 'both' || w.kind === 'indigenous') s += 15;
+    if (/no piped|unserved|mercury|uranium|arsenic|boil/i.test((w.issue||'') + ' ' + (w.notes||''))) s += 20;
+    return s;
+  }
+
+  function refreshWorld() {
+    enrichedWorld = WORLD_RAW.map((w) => {
+      const city = Object.assign({}, w, {
+        climate: climateStubForLat(w.lat, w.lng),
+        province: w.region || w.country,
+        remoteness: 'world',
+        advisoryType: w.issue && /boil/i.test(w.issue) ? 'BWA' : 'NEED',
+        homes: null,
+        systems: [w.issue || 'documented water access gap'],
+        note: w.notes,
+        source: w.source,
+        sourceUrl: w.sourceUrl,
+        term: w.term === 'short' ? 'short' : 'long',
+        world: true,
+        people: w.people,
+        country: w.country,
+        kindIssue: w.kind,
+      });
+      const e = Y.enrichCity(city, state.season);
+      e.needSignal = worldNeedSignal(w);
+      e.kind = 'world';
+      return e;
+    });
   }
 
   function refresh() {
     for (const k of Object.keys(solarCache)) delete solarCache[k];
     enriched = Y.enrichAll(CITIES, state.season);
+    refreshWorld();
     enrichedFn = FN.map((c) => {
       const e = Y.enrichCity(c, state.season);
       e.needSignal = needSignal(c);
@@ -736,7 +817,22 @@
     const title = $('#rank-title');
     const sub = $('#rank-sub');
 
-    if (state.rankMode === 'need') {
+    if (state.rankMode === 'world') {
+      if (title) title.textContent = 'World Indigenous / BWA need';
+      if (sub) sub.textContent = 'Curated documented sites · not exhaustive';
+      const rows = enrichedWorld.slice().sort((a, b) => b.needSignal - a.needSignal);
+      list.innerHTML = rows.map((c, i) => {
+        const y = c.yield;
+        return '<div class="rank-item need-item world' + (state.selectedId === c.id ? ' active' : '') + '" data-id="' + c.id + '" data-kind="world">' +
+          '<div class="num">' + (i + 1) + '</div>' +
+          '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
+          '<div class="city-meta">' + escapeHtml(c.country || '') + '  ·  ' + escapeHtml(c.people || '') + '  ·  ' + escapeHtml(c.issue || '') + '</div></div>' +
+          '<div class="yld need-yld">' +
+            '<span class="need-score">' + Math.round(c.needSignal) + '</span>' +
+            '<span>need  ·  ' + y.yieldLo + '–' + y.yieldHi + ' L est.</span>' +
+          '</div></div>';
+      }).join('');
+    } else if (state.rankMode === 'need') {
       if (title) title.textContent = 'Water need vs modeled yield';
       if (sub) sub.textContent = 'Long + short-term (ISC/FNHA) \u00b7 ranked by need signal';
       let rows = enrichedFn.slice();
@@ -778,6 +874,7 @@
       el.addEventListener('click', () => {
         if (IS_MOBILE) closeSheets();
         if (el.dataset.kind === 'fn') focusFn(el.dataset.id);
+        else if (el.dataset.kind === 'world') focusWorld(el.dataset.id);
         else focusCity(el.dataset.id);
       });
     });
@@ -818,6 +915,33 @@
       state.closeZoom = true;
       applyLayers();
       showFnTooltip(c, {
+        clientX: window.innerWidth / 2,
+        clientY: IS_MOBILE ? window.innerHeight * 0.55 : window.innerHeight / 2 - 40
+      });
+    }, 1450);
+    bumpIdle();
+  }
+
+  function focusWorld(id) {
+    const c = enrichedWorld.find((x) => x.id === id);
+    if (!c || !globe) return;
+    state.selectedId = id;
+    state.selectedKind = 'world';
+    updateRankList();
+    state.autoRotate = false;
+    if (globe.controls) {
+      try { globe.controls().autoRotate = false; } catch (e) {}
+    }
+    const rot = document.getElementById('layer-rotate');
+    if (rot) rot.checked = false;
+    applyLayers();
+    const alt = IS_MOBILE ? 0.28 : 0.32;
+    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
+    setTimeout(function () {
+      state.altitude = alt;
+      state.closeZoom = true;
+      applyLayers();
+      showWorldTooltip(c, {
         clientX: window.innerWidth / 2,
         clientY: IS_MOBILE ? window.innerHeight * 0.55 : window.innerHeight / 2 - 40
       });
@@ -912,7 +1036,7 @@
       });
     }
 
-    // Tall gold beacon pillar for selected Water Need
+    // Tall beacon pillar for selected Water Need (Canada or world)
     if (state.selectedKind === 'fn' && state.selectedId) {
       const sel = enrichedFn.find((x) => x.id === state.selectedId);
       if (sel) {
@@ -923,6 +1047,21 @@
           lng: sel.lng,
           yield: { yieldMid: 1 },
           _fn: sel,
+          beaconColor: '#ffd24a',
+        });
+      }
+    }
+    if (state.selectedKind === 'world' && state.selectedId) {
+      const sel = enrichedWorld.find((x) => x.id === state.selectedId);
+      if (sel) {
+        pts.push({
+          kind: 'need-beacon',
+          id: 'beacon-world-' + sel.id,
+          lat: sel.lat,
+          lng: sel.lng,
+          yield: { yieldMid: 1 },
+          _world: sel,
+          beaconColor: '#ff6ad5',
         });
       }
     }
@@ -951,7 +1090,7 @@
           return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
         })
         .pointColor((d) => {
-          if (d.kind === 'need-beacon') return '#ffd24a';
+          if (d.kind === 'need-beacon') return d.beaconColor || '#ffd24a';
           if (d.kind === 'reserve') {
             if (state.layers.solar) {
               const sol = d._solar || siteSolar(d.lat, d.lng, state.season, null);
@@ -971,6 +1110,7 @@
         .onPointClick((d) => {
           if (!d) return;
           if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
+          else if (d.kind === 'need-beacon' && d._world) focusWorld(d._world.id);
           else if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
           else if (d.kind === 'city' || d._city) focusCity(d.id || (d._city && d._city.id));
         });
@@ -1033,6 +1173,23 @@
         });
       }
     }
+    if (state.layers.world && state.selectedKind === 'world' && state.selectedId) {
+      const sel = enrichedWorld.find((c) => c.id === state.selectedId);
+      if (sel) {
+        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
+          mist.push({
+            lat: sel.lat,
+            lng: sel.lng,
+            maxR: maxR,
+            propagationSpeed: 0.9 + i * 0.25,
+            repeatPeriod: 700 + i * 200,
+            color: function () {
+              return i === 0 ? 'rgba(255, 240, 140, 0.85)' : 'rgba(255, 180, 40, 0.55)';
+            },
+          });
+        });
+      }
+    }
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
       .ringMaxRadius('maxR')
@@ -1053,6 +1210,12 @@
         htmlItems.push({ kind: 'fn', lat: c.lat, lng: c.lng, city: c, selected: selected });
       });
     }
+    if (state.layers.world) {
+      enrichedWorld.forEach((w) => {
+        const selected = state.selectedKind === 'world' && state.selectedId === w.id;
+        htmlItems.push({ kind: 'world', lat: w.lat, lng: w.lng, city: w, selected: selected });
+      });
+    }
 
     if (htmlItems.length) {
       globe.htmlElementsData(htmlItems)
@@ -1065,6 +1228,7 @@
             el.textContent = 'Tdp ' + d.city.yield.Tdp + '\u00b0C';
             return el;
           }
+          if (d.kind === 'world') return makeWorldPin(d.city);
           return makeFnPin(d.city);
         });
     } else {
@@ -1121,6 +1285,48 @@
     el.addEventListener('touchend', function (ev) {
       // iOS: HTML overlays on WebGL often miss click; touchend is reliable
       openFn(ev);
+    }, { passive: false });
+    return el;
+  }
+
+  function makeWorldPin(c) {
+    // Same visual language as Canadian need pins (amber BWA / gold short)
+    const isSelected = state.selectedKind === 'world' && state.selectedId === c.id;
+    const isShort = c.term === 'short';
+    const isDnc = /do not (consume|use)|arsenic|mercury|uranium/i.test(
+      (c.issue || '') + ' ' + (c.notes || '') + ' ' + (c.advisoryType || '')
+    );
+    const el = document.createElement('div');
+    el.className = 'fn-pin world' + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
+      (isSelected ? ' selected' : '');
+    el.title = '';
+    if (isSelected) {
+      el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
+        escapeHtml(shortName(c.name)) + '</span>';
+    } else {
+      el.innerHTML = '<span class="fn-pin-dot"></span>';
+    }
+    if (!IS_MOBILE) {
+      el.addEventListener('mouseenter', (ev) => {
+        showWorldTooltip(c, ev);
+        document.body.style.cursor = 'pointer';
+        bumpIdle();
+      });
+      el.addEventListener('mouseleave', () => {
+        hideTooltip();
+        document.body.style.cursor = 'default';
+      });
+    }
+    function openWorld(ev) {
+      if (ev) {
+        ev.stopPropagation();
+        if (ev.cancelable) ev.preventDefault();
+      }
+      focusWorld(c.id);
+    }
+    el.addEventListener('click', openWorld);
+    el.addEventListener('touchend', function (ev) {
+      openWorld(ev);
     }, { passive: false });
     return el;
   }
@@ -1258,6 +1464,49 @@
           'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC / FNHA') + '. ' +
           'List changes. Includes ISC long-term + short-term (south of 60 excl. BC) and FNHA BC advisories. ' +
           'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin. Solar irradiance model \u2014 not a utility interconnection study.' +
+        '</div>' +
+      '</div>');
+    pinTooltip(ev);
+  }
+
+  function showWorldTooltip(c, ev) {
+    const y = c.yield;
+    const people = c.people ? escapeHtml(c.people) : '—';
+    const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
+    const issue = escapeHtml(c.issue || 'documented water access gap');
+    const term = escapeHtml(c.term === 'short' ? 'Short-term' : (c.term === 'chronic' || c.term === 'long' ? 'Chronic / long-term' : String(c.term || 'long')));
+    const src = c.sourceUrl
+      ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
+      : escapeHtml(c.source || WORLD_META.sourceLabel || 'curated list');
+
+    tooltipEl.classList.remove('reserve-card');
+    tooltipEl.classList.add('need-card', 'world-card');
+    setTooltipHtml(
+      '<div class="tc-head need-head">' +
+        '<div class="need-kicker">WORLD NEED · Indigenous / BWA</div>' +
+        '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
+        '<div class="sub">' + region + '</div>' +
+        '<span class="badge world-badge">World</span> ' +
+        '<span class="badge long-badge">' + term + '</span>' +
+      '</div>' +
+      '<div class="tc-grid">' +
+        '<div class="tc-cell"><div class="k">People</div><div class="v">' + people + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Issue</div><div class="v">' + issue + '</div></div>' +
+        '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
+          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
+        '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
+        '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
+      '</div>' +
+      '<div class="tc-body">' +
+        (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
+        '<div class="why cold-caveat">Climate inputs are lat-band stubs (not weather-station normals). Yield is a model estimate only — this pin marks documented water NEED.</div>' +
+        '<div class="tc-breakdown">' +
+          '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>Need signal: <strong>' + Math.round(c.needSignal) + '</strong></span>' +
+        '</div>' +
+        '<div class="est-tag">' +
+          'Source: ' + src + '. Curated global list; not exhaustive; Canada FN on separate layer; centroids approximate. Model estimate · ' + escapeHtml(state.season) + ' bin.' +
         '</div>' +
       '</div>');
     pinTooltip(ev);

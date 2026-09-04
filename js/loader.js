@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var CACHE_BUST = '1788559981';
+  var CACHE_BUST = '1788560778';
   function withBust(url) {
     if (!url || /^https?:/i.test(url)) return url;
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;
@@ -23,6 +23,7 @@
     { src: 'data/fn-short-term.js', optional: true },
     { src: 'data/fn-bc-dwa.js', optional: true },
     { src: 'data/fn-reserves.js', optional: true },
+    { src: 'data/world-water-need.js', optional: true },
     'js/app.js'
   ];
 
