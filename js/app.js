@@ -114,7 +114,7 @@
     closeZoom: false,
     altitude: 1.9,
     mobileTouched: false,
-    openSheet: null, // 'layers' | 'list' | null
+    openSheet: null, // 'layers' | 'list' | 'search' | null
     tooltipPinned: false,
   };
 
@@ -327,11 +327,18 @@
     state.openSheet = null;
     const controls = $('#panel-controls');
     const rank = $('#panel-rank');
+    const search = $('#panel-search');
     const backdrop = $('#sheet-backdrop');
     const fabL = $('#fab-layers');
     const fabR = $('#fab-list');
+    const fabS = $('#fab-search');
+    const btnS = $('#btn-search');
     if (controls) controls.classList.remove('open');
     if (rank) rank.classList.remove('open');
+    if (search) {
+      search.classList.remove('open');
+      search.hidden = true;
+    }
     if (backdrop) {
       backdrop.classList.remove('show');
       backdrop.hidden = true;
@@ -339,10 +346,13 @@
     }
     if (fabL) fabL.setAttribute('aria-expanded', 'false');
     if (fabR) fabR.setAttribute('aria-expanded', 'false');
+    if (fabS) fabS.setAttribute('aria-expanded', 'false');
+    if (btnS) btnS.setAttribute('aria-expanded', 'false');
   }
 
   function openSheet(which) {
-    if (!IS_MOBILE) return;
+    // layers/list are mobile-only sheets; search works on desktop + mobile
+    if (which !== 'search' && !IS_MOBILE) return;
     closeSheets();
     hideTooltip();
     state.openSheet = which;
@@ -362,14 +372,149 @@
       if (el) el.classList.add('open');
       const fab = $('#fab-list');
       if (fab) fab.setAttribute('aria-expanded', 'true');
+    } else if (which === 'search') {
+      const el = $('#panel-search');
+      if (el) {
+        el.hidden = false;
+        el.classList.add('open');
+      }
+      const fab = $('#fab-search');
+      if (fab) fab.setAttribute('aria-expanded', 'true');
+      const btn = $('#btn-search');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+      const input = $('#search-input');
+      if (input) {
+        input.value = '';
+        renderSearchResults('');
+        setTimeout(function () {
+          try { input.focus(); } catch (e) {}
+        }, IS_MOBILE ? 280 : 40);
+      }
     }
+  }
+
+  function toggleSearch() {
+    if (state.openSheet === 'search') closeSheets();
+    else openSheet('search');
+  }
+
+  function normSearch(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function haystackMatch(query, parts) {
+    if (!query) return false;
+    const hay = normSearch(parts.filter(Boolean).join(' | '));
+    if (!hay) return false;
+    const tokens = query.split(/\s+/).filter(Boolean);
+    return tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+  }
+
+  function searchLocations(rawQuery) {
+    const q = normSearch(rawQuery);
+    if (!q || q.length < 1) return [];
+    const out = [];
+    const limit = 40;
+
+    // Water-need communities first
+    for (let i = 0; i < enrichedFn.length && out.length < limit; i++) {
+      const c = enrichedFn[i];
+      if (haystackMatch(q, [c.name, c.altNames, c.province, c.region, c.remoteness])) {
+        out.push({
+          kind: 'need',
+          id: c.id,
+          name: c.name,
+          meta: (c.province || '') + (c.altNames ? ' · ' + c.altNames : '') + ' · ' + termLabel(c),
+          score: (normSearch(c.name).indexOf(q) === 0 ? 0 : 1),
+        });
+      }
+    }
+
+    // Yield cities
+    for (let i = 0; i < enriched.length && out.length < limit; i++) {
+      const c = enriched[i];
+      if (haystackMatch(q, [c.name, c.region, c.market, c.note])) {
+        out.push({
+          kind: 'city',
+          id: c.id,
+          name: c.name,
+          meta: (c.region || '') + (c.market ? ' · ' + c.market : ''),
+          score: (normSearch(c.name).indexOf(q) === 0 ? 0 : 2),
+        });
+      }
+    }
+
+    // Reserves (large set — stop early)
+    const reserves = RESERVES || [];
+    for (let i = 0; i < reserves.length && out.length < limit; i++) {
+      const r = reserves[i];
+      if (haystackMatch(q, [r.name, r.alt, r.province, r.typeLabel, r.type])) {
+        out.push({
+          kind: 'reserve',
+          id: r.id,
+          name: r.name,
+          meta: (r.province || '') + (r.typeLabel ? ' · ' + r.typeLabel : '') + (r.alt ? ' · ' + r.alt : ''),
+          score: (normSearch(r.name).indexOf(q) === 0 ? 1 : 3),
+        });
+      }
+    }
+
+    out.sort(function (a, b) {
+      if (a.score !== b.score) return a.score - b.score;
+      return a.name.localeCompare(b.name);
+    });
+    return out.slice(0, limit);
+  }
+
+  function renderSearchResults(query) {
+    const box = $('#search-results');
+    const hint = $('#search-hint');
+    if (!box) return;
+    const q = normSearch(query);
+    if (!q) {
+      box.innerHTML = '';
+      if (hint) hint.textContent = 'Type to find water-need sites, reserves, or yield cities.';
+      return;
+    }
+    const results = searchLocations(q);
+    if (!results.length) {
+      box.innerHTML = '<div class="search-empty">No matches for “' + escapeHtml(query.trim()) + '”</div>';
+      if (hint) hint.textContent = 'Try another spelling, province code, or alt name.';
+      return;
+    }
+    if (hint) hint.textContent = results.length + ' result' + (results.length === 1 ? '' : 's');
+    const badge = { need: 'Need', reserve: 'Reserve', city: 'City' };
+    box.innerHTML = results.map(function (r) {
+      return '<button type="button" class="search-result" role="option" data-kind="' + r.kind + '" data-id="' + escapeHtml(r.id) + '">' +
+        '<span class="search-badge ' + r.kind + '">' + badge[r.kind] + '</span>' +
+        '<span class="search-result-main">' +
+          '<div class="search-result-name">' + escapeHtml(r.name) + '</div>' +
+          '<div class="search-result-meta">' + escapeHtml(r.meta) + '</div>' +
+        '</span></button>';
+    }).join('');
+    box.querySelectorAll('.search-result').forEach(function (el) {
+      el.addEventListener('click', function () {
+        selectSearchResult(el.dataset.kind, el.dataset.id);
+      });
+    });
+  }
+
+  function selectSearchResult(kind, id) {
+    closeSheets();
+    if (kind === 'need') focusFn(id);
+    else if (kind === 'reserve') focusReserve(id);
+    else if (kind === 'city') focusCity(id);
   }
 
   function initMobileChrome() {
     const fabL = $('#fab-layers');
     const fabR = $('#fab-list');
+    const fabS = $('#fab-search');
+    const btnS = $('#btn-search');
     const closeL = $('#close-layers');
     const closeR = $('#close-list');
+    const closeS = $('#close-search');
+    const searchInput = $('#search-input');
     const backdrop = $('#sheet-backdrop');
     const tipClose = $('#tooltip-close');
     const discDismiss = $('#disclaimer-dismiss');
@@ -387,8 +532,27 @@
         else openSheet('list');
       });
     }
+    if (fabS) fabS.addEventListener('click', toggleSearch);
+    if (btnS) btnS.addEventListener('click', toggleSearch);
     if (closeL) closeL.addEventListener('click', closeSheets);
     if (closeR) closeR.addEventListener('click', closeSheets);
+    if (closeS) closeS.addEventListener('click', closeSheets);
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        renderSearchResults(searchInput.value);
+      });
+      searchInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') {
+          closeSheets();
+        } else if (ev.key === 'Enter') {
+          const first = document.querySelector('#search-results .search-result');
+          if (first) {
+            ev.preventDefault();
+            selectSearchResult(first.dataset.kind, first.dataset.id);
+          }
+        }
+      });
+    }
     if (backdrop) {
       backdrop.addEventListener('click', () => {
         if (tooltipEl && tooltipEl.classList.contains('visible') && state.tooltipPinned) {
@@ -422,7 +586,7 @@
       if (tooltipEl.contains(ev.target)) return;
       if (ev.target.closest && ev.target.closest('.fn-pin')) return;
       // Allow sheet FABs without immediately fighting
-      if (ev.target.closest && (ev.target.closest('.fab') || ev.target.closest('.panel'))) return;
+      if (ev.target.closest && (ev.target.closest('.fab') || ev.target.closest('.panel') || ev.target.closest('.search-launch'))) return;
       hideTooltip();
     }, true);
   }
@@ -625,6 +789,7 @@
     state.selectedId = id;
     state.selectedKind = 'city';
     updateRankList();
+    applyLayers();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.8 }, 1200);
     showCityTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
     bumpIdle();
@@ -636,6 +801,7 @@
     state.selectedId = id;
     state.selectedKind = 'fn';
     updateRankList();
+    applyLayers();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: IS_MOBILE ? 0.7 : 1.55 }, 1200);
     if (IS_MOBILE) {
       setTimeout(function () {
@@ -652,6 +818,7 @@
     if (!r || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'reserve';
+    applyLayers();
     globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 0.55 }, 1400);
     const tipEv = { clientX: window.innerWidth / 2, clientY: window.innerHeight * 0.55 };
     const show = function () {
@@ -817,6 +984,20 @@
         });
       });
     }
+    // Single pulse ring ONLY on the selected water-need site
+    if (state.layers.ltdwa && state.selectedKind === 'fn' && state.selectedId) {
+      const sel = enrichedFn.find((c) => c.id === state.selectedId);
+      if (sel) {
+        mist.push({
+          lat: sel.lat,
+          lng: sel.lng,
+          maxR: 2.6,
+          propagationSpeed: 1.15,
+          repeatPeriod: 850,
+          color: function () { return 'rgba(255, 220, 100, 0.55)'; },
+        });
+      }
+    }
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
       .ringMaxRadius('maxR')
@@ -868,9 +1049,11 @@
     const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
     const isDnc = c.advisoryType === 'DNC' || c.advisoryType === 'DNU';
     const isShort = c.term === 'short';
+    const isSelected = state.selectedKind === 'fn' && state.selectedId === c.id;
     const el = document.createElement('div');
     el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
-      (state.layers.northern && isNorth ? ' emphasis' : '');
+      (state.layers.northern && isNorth ? ' emphasis' : '') +
+      (isSelected ? ' selected' : '');
     el.title = ''; // no native tooltip clutter; name only via hover/tap card
     // Dot only — never paint name labels on the globe (too busy)
     el.innerHTML = '<span class="fn-pin-dot"></span>';

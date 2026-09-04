@@ -30,8 +30,8 @@ A static server is required so CDN libraries and modules load correctly (avoid `
 - Auto-rotate when idle; orbit / zoom / drag
 - **All First Nations reserves** nationwide (NRCan Aboriginal Lands — Indian Reserves), silver hexbin/dots
 - First Nations **water-need** layer nationwide: ISC long-term LTDWA (amber/red) + ISC short-term (gold) + **FNHA BC** DWAs — not northern-only
-
-
+- **Location search** (desktop topbar / mobile FAB): find need sites, reserves, and yield cities by name, alt name, province, or region; fly to result with highlight
+- Selecting a **Water need** list item (or search Need hit) enlarges that pin with a bright pulse + single ring
 
 
 
