@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, plus ISC First Nations LTDWA need layer. Model estimates only. Mekilok, North Vancouver." />
+  <title>DEWFALL · Where water falls from air</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="loader" class="loader" aria-live="polite">
+    <div class="loader-inner">
+      <div class="loader-orb"></div>
+      <p>LOADING EARTH · DEWFALL MODEL</p>
+    </div>
+  </div>
+
+  <div id="globeViz" role="img" aria-label="Interactive 3D Earth globe showing DEWFALL estimated water yield and First Nations LTDWA need sites"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">DF</div>
+      <div class="brand-text">
+        <h1>DEWFALL</h1>
+        <p>Mekilok · North Vancouver · Alpha AWG</p>
+      </div>
+    </div>
+    <div class="disclaimer-banner">
+      <strong>Model estimates only.</strong>
+      Yields are climate-based projections — not measured.
+      Machine incomplete. Design target ~10–20 L/day residential.
+    </div>
+  </header>
+
+  <div class="ltdwa-banner" id="ltdwa-banner" role="status">
+    <strong>First Nations LTDWA need</strong>
+    · 38 communities · 40 advisories · ISC Aug 13, 2026
+    <span class="ltdwa-banner-note">Need sites ≠ high yield · northern cold → lower L/day</span>
+  </div>
+
+  <aside class="panel controls" aria-label="Map controls">
+    <h2>Visualization</h2>
+    <div class="ctrl-group">
+      <label class="group-label">Season climate bin</label>
+      <div class="seg" role="group">
+        <button type="button" data-season="annual" class="active">Annual</button>
+        <button type="button" data-season="summer">Summer</button>
+        <button type="button" data-season="winter">Winter</button>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <label class="group-label">Layers</label>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox" id="layer-yield" checked /> Estimated yield</label>
+        <label class="toggle"><input type="checkbox" id="layer-humidity" checked /> Humidity mist</label>
+        <label class="toggle"><input type="checkbox" id="layer-dewpoint" /> Dew-point labels</label>
+        <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> First Nations — active LTDWA (need)</label>
+        <label class="toggle toggle-need"><input type="checkbox" id="layer-northern" /> Northern remote highlight</label>
+        <label class="toggle"><input type="checkbox" id="layer-rotate" checked /> Auto-rotate</label>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-bar" title="Low to high estimated L/day"></div>
+      <div class="legend-labels"><span>Lower L/day</span><span>Higher water</span></div>
+      <div class="legend-need">
+        <span class="need-swatch bwa"></span> BWA need
+        <span class="need-swatch dnc"></span> Do not consume
+        <span class="need-swatch north"></span> Northern remote
+      </div>
+    </div>
+    <p class="hint">Cyan pillars = estimated L/day. Amber/red pins = ISC LTDWA need sites (not yield). Click a pin or ranked list.</p>
+  </aside>
+
+  <aside class="panel rank-panel" aria-label="Rankings">
+    <header>
+      <div class="rank-tabs" role="tablist">
+        <button type="button" class="rank-tab active" data-rank="yield" role="tab">Yield</button>
+        <button type="button" class="rank-tab" data-rank="need" role="tab">LTDWA need</button>
+      </div>
+      <h2 id="rank-title">Where DEWFALL produces most</h2>
+      <p id="rank-sub">Ranked by modeled L/day · click to fly</p>
+    </header>
+    <div id="rank-list" class="rank-list"></div>
+  </aside>
+
+  <div class="panel stats" aria-label="Summary stats">
+    <div class="stat"><div class="val" id="stat-peak">—</div><div class="lbl">Peak est.</div></div>
+    <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl">Avg est.</div></div>
+    <div class="stat"><div class="val" id="stat-top">—</div><div class="lbl">Top city</div></div>
+    <div class="stat"><div class="val" id="stat-high">—</div><div class="lbl">≥10 L cities</div></div>
+  </div>
+
+  <aside class="panel product-strip">
+    <div class="title">Product context</div>
+    <strong>DEWFALL Alpha</strong> — modular solar-ready residential AWG.
+    R290 refrigeration core + regenerating sorbent; Tier 5 = six TEC cassettes on dedicated solar, AI-gated by dew point, temps, airflow, energy.
+    <em>US Southwest</em> = drought demand · <em>coastal humid</em> = high yield.
+    <em>FN LTDWA</em> = unmet drinking-water need under local climate (often cold → lower model L/day).
+  </aside>
+
+  <div id="tooltip" class="tooltip-card" role="dialog" aria-label="Site details"></div>
+
+  <script src="js/loader.js"></script>
+</body>
+</html>
