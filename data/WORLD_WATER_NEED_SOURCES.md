@@ -1,7 +1,7 @@
 # WORLD_WATER_NEED — sources & gaps
 
 Curated dataset: `/workspace/dewfall-globe/data/world-water-need.js`  
-Built: 2026-09-04 · expanded same day · **99** community/settlement-level sites · ~**80 high / 19 medium** confidence  
+Built: 2026-09-04 · expanded same day · **156** community/settlement-level sites · ~**120 high / 36 medium** confidence  
 Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL globe).
 
 ## Primary sources used
@@ -114,21 +114,28 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 ## Counts by country (this build)
 | Country | Sites |
 |---------|------:|
-| USA | 47 |
-| Australia | 29 |
+| USA | 70 |
+| Australia | 30 |
+| Brazil | 13 |
+| Peru | 7 |
+| India | 6 |
 | Greenland | 5 |
-| Peru | 4 |
+| Bolivia | 3 |
+| Botswana | 3 |
+| Colombia | 3 |
 | Mexico | 3 |
+| Namibia | 2 |
 | New Zealand | 2 |
-| Brazil | 2 |
-| Bolivia | 1 |
-| Botswana | 1 |
-| Tanzania | 1 |
-| Namibia | 1 |
+| Chile | 1 |
+| Ecuador | 1 |
+| Kenya | 1 |
 | Kiribati | 1 |
-| Tuvalu | 1 |
 | Marshall Islands | 1 |
-| **Total** | **99** |
+| Paraguay | 1 |
+| Philippines | 1 |
+| Tanzania | 1 |
+| Tuvalu | 1 |
+| **Total** | **156** |
 
 ## Expansion log (2026-09-04) — +39 sites
 | Region | New ids | Key sources |
@@ -143,3 +150,24 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 | Andes | `pe-quechua-santa-fe`, `bo-aymara-tiquipa` | [Mongabay qocha](https://news.mongabay.com/2024/05/an-ancestral-solution-ensures-water-for-peruvian-alpaca-farmers-but-is-it-enough/); [Cultural Survival Tiquipa](https://www.culturalsurvival.org/news/tiquipa-community-bolivia-works-rescue-their-water-and-livelihoods-pollution) |
 
 **Not added (insufficient domestic-water citation):** Standing Rock Fort Yates (pipeline threat / spill dispute rather than chronic unpiped or active BWA); generic QLD remote lists without named community+URL.
+
+## Expansion log (2026-09-04) — +57 sites (expand-2 → **156** total)
+
+Priority: South America Indigenous → more USA tribal/Alaska → Africa → Asia → Pacific/Aus.
+
+| Region | New ids | Key sources |
+|--------|---------|-------------|
+| Brazil Yanomami | `br-yanomami-paapiu`, `waikas`, `maturaca`, `catrimani` | [Toxics/Fiocruz Hg burden](https://doi.org/10.3390/toxics13050339) |
+| Brazil Munduruku | `br-munduruku-sawre-muybu`, `poxo-muybu`, `sawre-aboy` | [MDPI Fiocruz](https://www.mdpi.com/1660-4601/18/17/9222); [Mongabay drought](https://news.mongabay.com/2024/09/drought-forces-amazon-indigenous-communities-to-drink-mercury-tainted-water/) |
+| Brazil Kayapó / Guarani | `br-kayapo-kubenkakej`, `akrotidjam`, `br-guarani-guyaroka`, `jaguapiru` | [Mongabay drought](https://news.mongabay.com/2024/10/extreme-drought-wrecks-rivers-and-daily-life-in-amazons-most-burnt-indigenous-land/); [SciELO pesticides](https://www.scielosp.org/article/csc/2024.v29n12/e06462024/en/) |
+| Peru Amazon | `pe-achuar-jose-olaya`, `pe-kukama-cuninico`, `pe-shipibo-nuevo-sucre` | Mongabay Achuar/Shipibo; CorpWatch Kukama Marañón ruling |
+| Andes / N Andes / Southern Cone | `ec-kichwa-capirona`, `bo-guarani-caigua`, `bo-quechua-antequera`, `co-wayuu-wasimo`, `santa-rita-dos`, `uribia`, `py-guarani-campo-aguae`, `cl-mapuche-lumaco` | Mongabay Capirona/Caigua/Wayuu; Cultural Survival Antequera; Al Jazeera/UN Campo Aguae; Water Alternatives Lumaco |
+| USA Navajo + SW tribes | `usa-navajo-lechee` … `coppermine`, `whitehorse-lake`, `usa-walker-river-paiute`, `usa-hualapai-peach-springs` | Searchlight; KUNC To'Hajiilee; The 74 Cutter Lateral; Prism Black Mesa; Nevada Current; Hualapai House testimony |
+| USA Alaska DEC | `usa-ak-birch-creek` … `takotna` (9) | [AK Leg DEC unserved list](https://www.akleg.gov/basis/get_documents.asp?docid=79041&session=32) |
+| Africa | `bw-tsodilo-san`, `bw-shaikerawe-san`, `ke-maasai-talek`, `na-epupa-himba` | Pulitzer San; Earth Island Maasai; International Rivers Himba Epupa |
+| Asia | `in-juanga-kantakoli`, `lekadpaju`, `burhidangal`, `ukharapahari`, `kutia-gunsupa`, `baladia`, `ph-igorot-naneng` | VillageSquare; Deccan Chronicle; Dialogue Earth; NewsClick; Mongabay Cordillera |
+| Australia | `aus-titjikala` | NT Better Bores / Inside Water |
+
+**All new ids (57):** `br-yanomami-paapiu`, `br-yanomami-waikas`, `br-yanomami-maturaca`, `br-yanomami-catrimani`, `br-munduruku-sawre-muybu`, `br-munduruku-poxo-muybu`, `br-munduruku-sawre-aboy`, `br-kayapo-kubenkakej`, `br-kayapo-akrotidjam`, `br-guarani-guyaroka`, `br-guarani-jaguapiru`, `pe-achuar-jose-olaya`, `pe-kukama-cuninico`, `pe-shipibo-nuevo-sucre`, `ec-kichwa-capirona`, `bo-guarani-caigua`, `bo-quechua-antequera`, `co-wayuu-wasimo`, `co-wayuu-santa-rita-dos`, `co-wayuu-uribia`, `py-guarani-campo-aguae`, `cl-mapuche-lumaco`, `usa-navajo-lechee`, `usa-navajo-tohajiilee`, `usa-navajo-ojo-encino`, `usa-navajo-nageezi`, `usa-navajo-torreon`, `usa-navajo-huerfano`, `usa-navajo-whitehorse-lake`, `usa-navajo-forest-lake`, `usa-navajo-big-mountain`, `usa-navajo-hard-rock`, `usa-navajo-bodaway`, `usa-navajo-coppermine`, `usa-walker-river-paiute`, `usa-hualapai-peach-springs`, `usa-ak-birch-creek`, `usa-ak-chalkyitsik`, `usa-ak-circle`, `usa-ak-eagle-village`, `usa-ak-koyukuk`, `usa-ak-rampart`, `usa-ak-stevens-village`, `usa-ak-stony-river`, `usa-ak-takotna`, `bw-tsodilo-san`, `bw-shaikerawe-san`, `ke-maasai-talek`, `na-epupa-himba`, `in-juanga-kantakoli`, `in-lekadpaju`, `in-burhidangal`, `in-ukharapahari`, `in-kutia-gunsupa`, `in-baladia`, `ph-igorot-naneng`, `aus-titjikala`
+
+**Not added (insufficient named+URL or weak domestic-water cite):** generic Sahel Fulani centroids; Chinese village lists; Mongolia herder points without settlement names; Standing Rock as pipeline dispute only; Kaliwa Dam displacement without current unsafe-drinking cite.
