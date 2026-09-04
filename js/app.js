@@ -946,23 +946,6 @@
     pinTooltip(ev);
   }
 
-  function
-if (!fl) {
-      fl = document.createElement('div');
-      fl.id = 'fn-float-label';
-      fl.className = 'fn-float-label';
-      document.body.appendChild(fl);
-    }
-    fl.textContent = name || '';
-    fl.classList.add('visible');
-    const x = Math.min(window.innerWidth - 220, Math.max(12, (ev && ev.clientX || window.innerWidth / 2) + 14));
-    const y = Math.max(12, (ev && ev.clientY || window.innerHeight / 2) - 36);
-    fl.style.left = x + 'px';
-    fl.style.top = y + 'px';
-    clearTimeout(showFloatingName._t);
-    showFloatingName._t = setTimeout(function () { fl.classList.remove('visible'); }, 4500);
-  }
-
   function showReserveTooltip(r, ev) {
     tooltipEl.classList.remove('need-card');
     tooltipEl.classList.add('reserve-card');
