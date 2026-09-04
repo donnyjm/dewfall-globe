@@ -1,7 +1,7 @@
 # WORLD_WATER_NEED — sources & gaps
 
 Curated dataset: `/workspace/dewfall-globe/data/world-water-need.js`  
-Built: 2026-09-04 · **60** community/settlement-level sites · **47 high / 13 medium** confidence  
+Built: 2026-09-04 · expanded same day · **99** community/settlement-level sites · ~**80 high / 19 medium** confidence  
 Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL globe).
 
 ## Primary sources used
@@ -17,6 +17,10 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 | [Alaska Legislature unserved list](https://www.akleg.gov/basis/get_documents.asp?docid=78814&session=32) | Named villages used for points (Chefornak, Kipnuk, Kivalina, Newtok, etc.) |
 | [Running Strong / Pine Ridge water connections](https://indianyouth.org/52-families-on-pine-ridge-will-finally-have-access-to-running-water/) | Oglala Lakota homes still awaiting OSRWSS connections |
 | [US Water Alliance / DigDeep Closing the Water Access Gap](https://uswateralliance.org/) (contextual) | National framing that Native households are disproportionately unserved |
+| [Alaska DEC unserved PDF (2017)](https://dec.alaska.gov/media/8116/vsw-july-2017-unserved-villages-by-region.pdf) | Full named unserved village list used for expansion (Alatna…Platinum) |
+| [EPA Hopi arsenic milestone](https://www.epa.gov/newsreleases/epa-hopi-tribe-federal-partners-reach-milestone-safe-drinking-water-conclude) | First Mesa, Sipaulovi, Shungopavi, Mishongnovi named |
+| [USBR WMAT Rural Water System DEIS](https://www.wmat-rws-eis.com/documents/WMAT_RWS_DEIS_July%202022_508.pdf) | Whiteriver groundwater decline / supply shortfalls |
+| [Architectural League — Cheyenne River water](https://archleague.org/article/cheyenne-river-reservation-water/) | Tap moratorium, cisterns, haul waitlists |
 
 ### Australia — remote Aboriginal & Torres Strait
 | Source | What it provided |
@@ -28,6 +32,8 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 | [Water Corporation WA — Kiwirrkurra](https://www.watercorporation.com.au/about-us/media-releases/2026/march-2026/clean-drinking-water-restored-to-most-remote-aboriginal-community-in-wa) | Fluoride/nitrate bottled-water period 2020–2026 |
 | [WA Auditor-General remote communities](https://www.abc.net.au/news/2021-06-03/remote-community-water-report/100185414) | Context: dozens of communities on bottled water; ADWG failures |
 | [ATSE — Closing the water gap](https://atse.org.au/news/top-engineers-call-for-data-and-solutions-for-unsafe-water-in-remote-indigenous-communities/) | National reporting excludes remote Indigenous systems (<10k connections) |
+| [Water Corporation WA ACWS DWQ Annual Report 2023–24](https://pw-cdn.watercorporation.com.au/-/media/watercorp/documents/about-us/our-performance/drinking-water-quality/acws/2023-24-drinking-water-quality-annual-report.pdf) | Named nitrate infant lists + ongoing U/F/turbidity bottled-water communities |
+| [Guardian — NT uranium (Wilora)](https://www.theguardian.com/australia-news/2018/jun/20/uranium-in-remote-communities-water-puts-peoples-lives-at-risk) | Wilora named with Laramba/Willowra |
 
 ### New Zealand — Māori
 | Source | What it provided |
@@ -44,6 +50,10 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 | [AA — Matsigenka Manu](https://www.aa.com.tr/en/americas/between-intrusion-and-drying-rivers-in-peru-s-amazon-a-tribe-leads-the-fight-for-clean-water/3685028) | Tayakome / Yomybato waterborne disease history |
 | [AP — Nanay River mercury complaint](https://apnews.com/article/peru-mercury-illegal-mining-indigenous-48af39f0f972b17541bb766bb3801b8f) | Ikito and neighboring Amazon communities |
 | [Mongabay — Amazon drought / Indigenous WASH](https://news.mongabay.com/2025/02/as-the-rainforest-gets-drier-amazon-indigenous-groups-thirst-for-clean-water/) | Regional context (~27.5% Indigenous Amazon with adequate water/sanitation) |
+| [Mongabay — Yaqui River arsenic](https://news.mongabay.com/2024/09/lack-of-research-as-contaminated-yaqui-river-poses-health-risks/) | Vícam, Pótam, Cócorit drinking-water arsenic |
+| [Tribuna — Loma de Guamúchil manganese](https://www.tribuna.com.mx/sonora/2024/7/17/comunidades-yaquis-loma-de-guamuchil-presenta-problemas-de-salud-por-manganeso-374708.html) | ~50% without potable; manganese wells |
+| [Mongabay — Santa Fe qocha](https://news.mongabay.com/2024/05/an-ancestral-solution-ensures-water-for-peruvian-alpaca-farmers-but-is-it-enough/) | Quechua highland community water shortage |
+| [Cultural Survival — Tiquipa](https://www.culturalsurvival.org/news/tiquipa-community-bolivia-works-rescue-their-water-and-livelihoods-pollution) | Aymara Katari/Titicaca pollution |
 
 ### Africa — Indigenous / pastoralist (where named sources exist)
 | Source | What it provided |
@@ -92,7 +102,7 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 5. **New Zealand**: Taumata Arowai does not publish a simple open Māori-community BWA map; Rūātoki is a documented local case. Many marae supplies are small/unregistered — no lat/lng list.
 6. **Sápmi (Sámi)**: literature emphasizes hydropower / land-rights impacts more than domestic “no piped drinking water” settlements; **skipped** rather than invent domestic BWA points.
 7. **Canada territories / Inuit**: ISC LTDWA layer already covers First Nations public systems; Nunavut/Nunavik haul-water communities are documented regionally but were not duplicated here to avoid overlap with the Canada globe layer.
-8. **Latin America Andes (Quechua/Aymara)**: strong regional WASH disparity stats, but fewer citable settlement-level drinking-water failure URLs with stable names than Amazon mercury/oil cases — thin on purpose.
+8. **Latin America Andes (Quechua/Aymara)**: still thinner than Amazon cases; expansion added Santa Fe (Quechua qocha) and Tiquipa (Aymara) where named URLs exist — still not a dense point layer.
 9. **Africa**: San/Maasai/Himba included only where a named place + URL existed; no continent-wide Indigenous BWA list.
 10. **Pacific outer islands**: project documents often name “outer atolls” generically without a public village coordinate table.
 
@@ -104,16 +114,32 @@ Canada ISC First Nations LTDWA **intentionally excluded** (already on DEWFALL gl
 ## Counts by country (this build)
 | Country | Sites |
 |---------|------:|
-| USA | 28 |
-| Australia | 14 |
+| USA | 47 |
+| Australia | 29 |
 | Greenland | 5 |
-| Peru | 3 |
+| Peru | 4 |
+| Mexico | 3 |
 | New Zealand | 2 |
 | Brazil | 2 |
+| Bolivia | 1 |
 | Botswana | 1 |
 | Tanzania | 1 |
 | Namibia | 1 |
 | Kiribati | 1 |
 | Tuvalu | 1 |
 | Marshall Islands | 1 |
-| **Total** | **60** |
+| **Total** | **99** |
+
+## Expansion log (2026-09-04) — +39 sites
+| Region | New ids | Key sources |
+|--------|---------|-------------|
+| USA Alaska DEC unserved | `usa-ak-alatna`, `allakaket`, `lime-village`, `oscarville`, `tuntutuliak`, `tununak`, `venetie`, `crooked-creek`, `shageluk`, `platinum` | [ADEC July 2017 PDF](https://dec.alaska.gov/media/8116/vsw-july-2017-unserved-villages-by-region.pdf) |
+| USA Hopi villages | `usa-hopi-first-mesa`, `sipaulovi`, `shungopavi` | [EPA arsenic-order termination](https://www.epa.gov/newsreleases/epa-hopi-tribe-federal-partners-reach-milestone-safe-drinking-water-conclude) |
+| USA Navajo chapters | `usa-navajo-oljato`, `dennehotso`, `leupp`, `tolani-lake` | ICT; [LA Times/DigDeep](https://www.latimes.com/environment/story/2024-04-07/here-arizona-nurtures-the-navajo-nation-but-lacks-water); [AZ Central/TLE](https://www.azcentral.com/story/news/local/arizona/2020/12/29/cares-act-funding-helps-build-much-needed-water-wells-navajo-nation/4016183001/) |
+| USA Apache / Lakota | `usa-wmat-whiteriver`, `usa-cheyenne-river` | [WMAT RWS DEIS](https://www.wmat-rws-eis.com/documents/WMAT_RWS_DEIS_July%202022_508.pdf); [Architectural League](https://archleague.org/article/cheyenne-river-reservation-water/) |
+| Australia WA ACWS | `aus-jigalong`, `warburton`, `tjuntjuntjara`, `mulan`, `wanarn`, `kunawarritji`, `wingellina`, `blackstone`, `yandeyarra`, `burringurrah`, `pia-wadjari`, `tjukurla`, `bow-river` | [Water Corp ACWS 2023–24 DWQ report](https://pw-cdn.watercorporation.com.au/-/media/watercorp/documents/about-us/our-performance/drinking-water-quality/acws/2023-24-drinking-water-quality-annual-report.pdf) (nitrate infant lists + ongoing U/F advisories) |
+| Australia NT | `aus-wilora`, `aus-yuelamu` | [Guardian uranium](https://www.theguardian.com/australia-news/2018/jun/20/uranium-in-remote-communities-water-puts-peoples-lives-at-risk); Inside Water Better Bores |
+| Mexico Yaqui | `mx-yaqui-vicam`, `potam`, `loma-guamuchil` | [Mongabay](https://news.mongabay.com/2024/09/lack-of-research-as-contaminated-yaqui-river-poses-health-risks/); Tribuna Sonora |
+| Andes | `pe-quechua-santa-fe`, `bo-aymara-tiquipa` | [Mongabay qocha](https://news.mongabay.com/2024/05/an-ancestral-solution-ensures-water-for-peruvian-alpaca-farmers-but-is-it-enough/); [Cultural Survival Tiquipa](https://www.culturalsurvival.org/news/tiquipa-community-bolivia-works-rescue-their-water-and-livelihoods-pollution) |
+
+**Not added (insufficient domestic-water citation):** Standing Rock Fort Yates (pipeline threat / spill dispute rather than chronic unpiped or active BWA); generic QLD remote lists without named community+URL.

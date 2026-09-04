@@ -281,7 +281,7 @@
         state.layers[key] = el.checked;
         if (key === 'ltdwa' || key === 'world' || key === 'northern' || key === 'reserves') {
           updateLtdwaBanner();
-          if (state.rankMode === 'need' || state.rankMode === 'world') updateRankList();
+          if (state.rankMode === 'need' || state.rankMode === 'world' || state.rankMode === 'fit') updateRankList();
           if (state.layers.solar) updateStats();
         }
         if (key === 'solar') {
@@ -679,6 +679,204 @@
     };
   }
 
+
+  /**
+   * Fit = how well DEWFALL's climate/yield matches a water-NEED site.
+   * Geometric mean of need intensity (0–100) and yield suitability (0–100).
+   * High need + weak climate → honest LOW fit (not a sales lie).
+   * High need + workable climate → HIGH fit (priority outreach).
+   */
+  function fitScoreFor(c) {
+    const need = Math.max(0, c.needSignal || 0);
+    // need intensity: log-ish scale so huge home counts don't dominate forever
+    // const needNorm = Math.max(0, Math.min(100, 18 * Math.log10(need + 1) * 12)); // tune so typical 20–90
+    // Better: percentile-free fixed scale
+    // needSignal Canada often homes*weight ~ 10–500; world ~50–110
+    const need01 = Math.max(0, Math.min(1, Math.log10(need + 1) / Math.log10(401))); // 0..~1 at 400
+    const yMid = (c.yield && c.yield.yieldMid != null) ? +c.yield.yieldMid : 0;
+    // Design band ~10–20 L/day; 0 L = 0 suitability; 12+ L = strong
+    const yield01 = Math.max(0, Math.min(1, yMid / 14));
+    const fit01 = Math.sqrt(need01 * yield01); // geometric mean
+    const score = Math.round(fit01 * 100);
+    let label;
+    if (score >= 70) label = 'Strong fit';
+    else if (score >= 45) label = 'Moderate fit';
+    else if (score >= 25) label = 'Limited fit';
+    else label = 'Weak fit · cold/dry climate';
+    let blurb;
+    if (yield01 < 0.25 && need01 > 0.4) blurb = 'High need, but local climate yields little from refrigeration AWG — honest weak product fit.';
+    else if (yield01 >= 0.5 && need01 >= 0.4) blurb = 'Meaningful need where DEWFALL climate model looks workable — priority conversation site.';
+    else if (yield01 >= 0.5) blurb = 'Decent modeled yield; need signal moderate.';
+    else blurb = 'Need and/or climate are modest under this season’s model bin.';
+    return { score, label, blurb, need01, yield01, yMid };
+  }
+
+  function fitClass(score) {
+    if (score >= 70) return 'fit-hi';
+    if (score >= 45) return 'fit-mid';
+    return 'fit-lo';
+  }
+
+  function sitePermalink(id) {
+    let base;
+    if (/donnyjm\.github\.io/i.test(location.hostname)) {
+      base = 'https://donnyjm.github.io/dewfall-globe/';
+    } else {
+      base = location.origin + location.pathname;
+    }
+    try {
+      const u = new URL(base, location.href);
+      u.search = '';
+      u.hash = '';
+      u.searchParams.set('site', id);
+      return u.toString();
+    } catch (e) {
+      const clean = String(base).split('#')[0].split('?')[0];
+      const join = /[?&]$/.test(clean) ? '' : (clean.indexOf('?') >= 0 ? '&' : '?');
+      return clean + join + 'site=' + encodeURIComponent(id);
+    }
+  }
+
+  function setSiteParam(id) {
+    try {
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set('site', id);
+      else url.searchParams.delete('site');
+      const next = url.pathname + url.search + (url.hash || '');
+      history.replaceState(null, '', next);
+    } catch (e) {}
+  }
+
+  function siteXmlocation(c) {
+    if (c.lat != null && c.lng != null) {
+      return Number(c.lat).toFixed(4) + ', ' + Number(c.lng).toFixed(4);
+    }
+    return [c.province || c.country, c.region].filter(Boolean).join(' · ') || '—';
+  }
+
+  function siteCardText(c) {
+    const y = c.yield || {};
+    const fit = c.fit || fitScoreFor(c);
+    const sol = c.solar || solarForEntity(c);
+    const issue = c.issue || advisoryLabel(c.advisoryTypeRaw || c.advisoryType) || 'documented water access gap';
+    const src = c.source || (c.world ? (getWorldMeta().sourceLabel || 'curated list') : (FN_META.sourceLabel || 'ISC / FNHA'));
+    const srcUrl = c.sourceUrl ? (' ' + c.sourceUrl) : '';
+    const untapped = sol && sol.untappedKWhYear != null ? formatKWh(sol.untappedKWhYear) : '—';
+    return [
+      'DEWFALL site card — ' + (c.name || 'site'),
+      siteXmlocation(c),
+      'Need: ' + issue,
+      'Fit: ' + fit.score + ' · ' + fit.label,
+      'Modeled yield (' + state.season + '): ' + y.yieldLo + '–' + y.yieldHi + ' L/day (model estimate)',
+      'Solar untapped (TEC branch): ' + untapped + ' model',
+      'Source: ' + src + srcUrl,
+      'Map: ' + sitePermalink(c.id),
+      '— Mekilok / DEWFALL · model estimates only; not measured'
+    ].join('\n');
+  }
+
+  function copyText(text, btn) {
+    const done = function () {
+      if (!btn) return;
+      const prev = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = prev;
+        btn.classList.remove('copied');
+      }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopy(text); done();
+      });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) {
+      console.warn('[DEWFALL] copy failed', e);
+    }
+  }
+
+  function shareRowHtml() {
+    return '<div class="share-row">' +
+      '<button type="button" class="share-btn" data-share="link">Copy link</button>' +
+      '<button type="button" class="share-btn" data-share="text">Copy card</button>' +
+      '</div>';
+  }
+
+  function wireShareButtons(c) {
+    const root = tooltipContentEl();
+    if (!root || !c) return;
+    root.querySelectorAll('[data-share]').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (ev.cancelable) ev.preventDefault();
+        const mode = btn.dataset.share;
+        if (mode === 'link') copyText(sitePermalink(c.id), btn);
+        else if (mode === 'text') copyText(siteCardText(c), btn);
+      });
+    });
+  }
+
+  function fitScoreCellHtml(fit) {
+    if (!fit) return '';
+    return '<div class="tc-cell span2 fit-cell">' +
+      '<div class="k">Fit score</div>' +
+      '<div class="v big fit-score-big ' + fitClass(fit.score) + '">' + fit.score +
+      ' <span class="fit-label">' + escapeHtml(fit.label) + '</span></div></div>';
+  }
+
+  function parseSiteParam() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      let site = params.get('site');
+      if (!site && window.location.hash) {
+        const m = String(window.location.hash).match(/[#&?]site=([^&]+)/i);
+        if (m) site = decodeURIComponent(m[1]);
+      }
+      return site || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function applySiteDeepLink() {
+    const site = parseSiteParam();
+    if (!site || !globe) return false;
+    if (enrichedFn.some(function (x) { return x.id === site; })) {
+      focusFn(site);
+      return true;
+    }
+    if (enrichedWorld.some(function (x) { return x.id === site; })) {
+      focusWorld(site);
+      return true;
+    }
+    if (enriched.some(function (x) { return x.id === site; })) {
+      focusCity(site);
+      return true;
+    }
+    if (reserveById[site] || (RESERVES || []).some(function (x) { return x.id === site; })) {
+      focusReserve(site);
+      return true;
+    }
+    return false;
+  }
+
   function worldNeedSignal(w) {
     let s = 50;
     if (w.term === 'chronic' || w.term === 'long') s += 25;
@@ -708,6 +906,7 @@
       const e = Y.enrichCity(city, state.season);
       e.needSignal = worldNeedSignal(w);
       e.kind = 'world';
+      e.fit = fitScoreFor(e);
       return e;
     });
   }
@@ -726,6 +925,7 @@
       e.advisoryTypeRaw = c.advisoryTypeRaw;
       e.fnha = c.fnha;
       e.source = c.source;
+      e.fit = fitScoreFor(e);
       return e;
     });
     updateStats();
@@ -821,19 +1021,47 @@
     const title = $('#rank-title');
     const sub = $('#rank-sub');
 
-    if (state.rankMode === 'world') {
+    if (state.rankMode === 'fit') {
+      if (title) title.textContent = 'Need × yield fit';
+      if (sub) sub.textContent = 'Need × modeled yield · higher = better DEWFALL conversation';
+      const rows = enrichedFn.concat(enrichedWorld).slice().sort(function (a, b) {
+        const fa = (a.fit && a.fit.score) || 0;
+        const fb = (b.fit && b.fit.score) || 0;
+        return fb - fa;
+      });
+      list.innerHTML = rows.map(function (c, i) {
+        const y = c.yield;
+        const fit = c.fit || { score: 0, label: '—' };
+        const where = c.world
+          ? escapeHtml(c.country || '') + ' · world'
+          : escapeHtml(c.province || '') + ' · ' + escapeHtml(termLabel(c));
+        const kind = c.world ? 'world' : 'fn';
+        return '<div class="rank-item need-item fit-item' + (state.selectedId === c.id ? ' active' : '') +
+          '" data-id="' + c.id + '" data-kind="' + kind + '">' +
+          '<div class="num">' + (i + 1) + '</div>' +
+          '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
+          '<div class="city-meta">' + where + ' · ' + escapeHtml(fit.label) + '</div></div>' +
+          '<div class="yld need-yld">' +
+            '<span class="need-score ' + fitClass(fit.score) + '">' + fit.score + '</span>' +
+            '<span>fit · ' + y.yieldLo + '–' + y.yieldHi + ' L est.</span>' +
+          '</div></div>';
+      }).join('');
+    } else if (state.rankMode === 'world') {
       if (title) title.textContent = 'World Indigenous / BWA need';
       if (sub) sub.textContent = 'Curated documented sites · not exhaustive';
       const rows = enrichedWorld.slice().sort((a, b) => b.needSignal - a.needSignal);
       list.innerHTML = rows.map((c, i) => {
         const y = c.yield;
+        const fit = c.fit;
+        const fitCls = fit ? (' ' + fitClass(fit.score)) : '';
         return '<div class="rank-item need-item world' + (state.selectedId === c.id ? ' active' : '') + '" data-id="' + c.id + '" data-kind="world">' +
           '<div class="num">' + (i + 1) + '</div>' +
           '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
           '<div class="city-meta">' + escapeHtml(c.country || '') + '  ·  ' + escapeHtml(c.people || '') + '  ·  ' + escapeHtml(c.issue || '') + '</div></div>' +
           '<div class="yld need-yld">' +
-            '<span class="need-score">' + Math.round(c.needSignal) + '</span>' +
-            '<span>need  ·  ' + y.yieldLo + '–' + y.yieldHi + ' L est.</span>' +
+            '<span class="need-score' + fitCls + '">' + Math.round(c.needSignal) + '</span>' +
+            '<span>need  ·  ' + y.yieldLo + '–' + y.yieldHi + ' L est.' +
+            (fit ? (' · fit ' + fit.score) : '') + '</span>' +
           '</div></div>';
       }).join('');
     } else if (state.rankMode === 'need') {
@@ -850,14 +1078,17 @@
         const north = (c.remoteness === 'remote-northern' || c.highlightNorthern) ? ' north' : '';
         const dnc = (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') ? ' dnc' : '';
         const shortCls = c.term === 'short' ? ' short-term' : '';
+        const fit = c.fit;
+        const fitCls = fit ? (' ' + fitClass(fit.score)) : '';
         return '<div class="rank-item need-item' + north + dnc + shortCls + (state.selectedId === c.id ? ' active' : '') + '" data-id="' + c.id + '" data-kind="fn">' +
           '<div class="num">' + (i + 1) + '</div>' +
           '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
           '<div class="city-meta">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(termLabel(c)) + ' \u00b7 ' + escapeHtml(advisoryLabel(c.advisoryTypeRaw || c.advisoryType)) +
           ' \u00b7 ' + escapeHtml(homes) + ' \u00b7 ' + escapeHtml(c.remoteness) + '</div></div>' +
           '<div class="yld need-yld">' +
-            '<span class="need-score">' + Math.round(c.needSignal) + '</span>' +
-            '<span>need \u00b7 ' + y.yieldLo + '\u2013' + y.yieldHi + ' L est.</span>' +
+            '<span class="need-score' + fitCls + '">' + Math.round(c.needSignal) + '</span>' +
+            '<span>need \u00b7 ' + y.yieldLo + '\u2013' + y.yieldHi + ' L est.' +
+            (fit ? (' \u00b7 fit ' + fit.score) : '') + '</span>' +
           '</div></div>';
       }).join('');
     } else {
@@ -901,6 +1132,7 @@
     if (!c || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'fn';
+    setSiteParam(id);
     updateRankList();
     // Stop spinning so the pin stays in frame
     state.autoRotate = false;
@@ -931,6 +1163,7 @@
     if (!c || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'world';
+    setSiteParam(id);
     updateRankList();
     state.autoRotate = false;
     if (globe.controls) {
@@ -1285,8 +1518,9 @@
     el.title = '';
     // Dot only — except the SELECTED water-need site shows its name as a locator
     if (isSelected) {
+      const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
-        escapeHtml(shortName(c.name)) + '</span>';
+        escapeHtml(shortName(c.name)) + fitBit + '</span>';
     } else {
       el.innerHTML = '<span class="fn-pin-dot"></span>';
     }
@@ -1328,8 +1562,9 @@
       (isSelected ? ' selected' : '');
     el.title = '';
     if (isSelected) {
+      const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
-        escapeHtml(shortName(c.name)) + '</span>';
+        escapeHtml(shortName(c.name)) + fitBit + '</span>';
     } else {
       el.innerHTML = '<span class="fn-pin-dot"></span>';
     }
@@ -1442,6 +1677,8 @@
 
   function showFnTooltip(c, ev, reserveCtx) {
     const y = c.yield;
+    const fit = c.fit || fitScoreFor(c);
+    if (!c.fit) c.fit = fit;
     const homes = c.homes != null ? String(c.homes) : (c.populationNote || c.homesImpactNote || 'see systems');
     const since = c.longTermSince || c.dateSet || 'see source';
     const systems = (c.systems || []).map(escapeHtml).join('<br/>');
@@ -1460,24 +1697,26 @@
     tooltipEl.classList.add('need-card');
     setTooltipHtml(
       '<div class="tc-head need-head">' +
-        '<div class="need-kicker">NEED \u00b7 water access \u2014 not a high-yield site</div>' +
+        '<div class="need-kicker">NEED · fit = need × climate yield (model)</div>' +
         '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
         alt +
         resLine +
-        '<div class="sub">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(c.remoteness) + '</div>' +
+        '<div class="sub">' + escapeHtml(c.province) + ' · ' + escapeHtml(c.remoteness) + '</div>' +
         termTag + ' ' +
         '<span class="badge ' + badge + '">' + escapeHtml(advisoryLabel(c.advisoryTypeRaw || c.advisoryType)) + '</span> ' +
         northTag + ' ' + bcTag +
       '</div>' +
       '<div class="tc-grid">' +
+        fitScoreCellHtml(fit) +
         '<div class="tc-cell"><div class="k">Population / homes</div><div class="v">' + escapeHtml(homes) + '</div></div>' +
         '<div class="tc-cell"><div class="k">' + (c.term === 'short' ? 'Date set' : 'Long-term since') + '</div><div class="v">' + escapeHtml(since) + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under local climate</div><div class="v big need-yield">' +
-          y.yieldLo + ' \u2013 ' + y.yieldHi + ' L/day <span class="model-only">(model)</span></div></div>' +
-        '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' \u00b0C \u00b7 ' + y.RH + '%</div></div>' +
-        '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' \u00b0C</div></div>' +
+          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model)</span></div></div>' +
+        '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
+        '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
       '</div>' +
       '<div class="tc-body">' +
+        '<div class="fit-blurb">' + escapeHtml(fit.blurb) + '</div>' +
         '<div class="systems"><strong>System(s):</strong><br/>' + systems + '</div>' +
         '<div class="why cold-caveat">' + escapeHtml(coldClimateCaveat(c)) + '</div>' +
         (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
@@ -1490,19 +1729,23 @@
         '<div class="est-tag">' +
           'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC / FNHA') + '. ' +
           'List changes. Includes ISC long-term + short-term (south of 60 excl. BC) and FNHA BC advisories. ' +
-          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin. Solar irradiance model \u2014 not a utility interconnection study.' +
+          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate · ' + escapeHtml(state.season) + ' bin. Solar irradiance model — not a utility interconnection study.' +
         '</div>' +
+        shareRowHtml() +
       '</div>');
+    wireShareButtons(c);
     pinTooltip(ev);
   }
 
   function showWorldTooltip(c, ev) {
     const y = c.yield;
+    const fit = c.fit || fitScoreFor(c);
+    if (!c.fit) c.fit = fit;
     const people = c.people ? escapeHtml(c.people) : '—';
     const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
     const issue = escapeHtml(c.issue || 'documented water access gap');
     const term = escapeHtml(c.term === 'short' ? 'Short-term' : (c.term === 'chronic' || c.term === 'long' ? 'Chronic / long-term' : String(c.term || 'long')));
-    const src = c.sourceUrl
+    const srcHtml = c.sourceUrl
       ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
       : escapeHtml(c.source || getWorldMeta().sourceLabel || 'curated list');
 
@@ -1510,13 +1753,14 @@
     tooltipEl.classList.add('need-card', 'world-card');
     setTooltipHtml(
       '<div class="tc-head need-head">' +
-        '<div class="need-kicker">WORLD NEED · Indigenous / BWA</div>' +
+        '<div class="need-kicker">WORLD NEED · fit = need × climate yield (model)</div>' +
         '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
         '<div class="sub">' + region + '</div>' +
         '<span class="badge world-badge">World</span> ' +
         '<span class="badge long-badge">' + term + '</span>' +
       '</div>' +
       '<div class="tc-grid">' +
+        fitScoreCellHtml(fit) +
         '<div class="tc-cell"><div class="k">People</div><div class="v">' + people + '</div></div>' +
         '<div class="tc-cell"><div class="k">Issue</div><div class="v">' + issue + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
@@ -1525,6 +1769,7 @@
         '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
       '</div>' +
       '<div class="tc-body">' +
+        '<div class="fit-blurb">' + escapeHtml(fit.blurb) + '</div>' +
         (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
         '<div class="why cold-caveat">Climate inputs are lat-band stubs (not weather-station normals). Yield is a model estimate only — this pin marks documented water NEED.</div>' +
         '<div class="tc-breakdown">' +
@@ -1533,9 +1778,11 @@
           '<span>Need signal: <strong>' + Math.round(c.needSignal) + '</strong></span>' +
         '</div>' +
         '<div class="est-tag">' +
-          'Source: ' + src + '. Curated global list; not exhaustive; Canada FN on separate layer; centroids approximate. Model estimate · ' + escapeHtml(state.season) + ' bin.' +
+          'Source: ' + srcHtml + '. Curated global list; not exhaustive; Canada FN on separate layer; centroids approximate. Model estimate · ' + escapeHtml(state.season) + ' bin.' +
         '</div>' +
+        shareRowHtml() +
       '</div>');
+    wireShareButtons(c);
     pinTooltip(ev);
   }
 
@@ -1697,6 +1944,8 @@
     setTimeout(() => {
       const loader = $("#loader");
       if (loader) loader.classList.add("hide");
+      // Deep link ?site=<id> after enrich + globe ready
+      try { applySiteDeepLink(); } catch (e) { console.warn('[DEWFALL] site deep link', e); }
     }, 900);
   }
 

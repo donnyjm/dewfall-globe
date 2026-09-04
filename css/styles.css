@@ -1490,3 +1490,93 @@ body.mobile-ui .fn-pin.selected .fn-pin-label-selected {
 .tooltip-card.world-card .need-kicker {
   color: #ff6ad5;
 }
+
+
+/* —— Fit score + shareable site cards —— */
+.rank-tab[data-rank="fit"].active {
+  color: #7dffb0;
+  border-color: rgba(80, 220, 140, 0.45);
+  background: rgba(60, 180, 110, 0.14);
+}
+.rank-tab[data-rank="world"].active {
+  color: #ff6ad5;
+  border-color: rgba(224, 64, 251, 0.4);
+  background: rgba(224, 64, 251, 0.12);
+}
+.fit-score-big {
+  font-size: 1.55rem !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.fit-score-big .fit-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  opacity: 0.92;
+}
+.fit-hi { color: #5ee0a0 !important; }
+.fit-mid { color: #ffc040 !important; }
+.fit-lo { color: #ff7a6a !important; }
+.need-score.fit-hi { color: #5ee0a0; }
+.need-score.fit-mid { color: #ffc040; }
+.need-score.fit-lo { color: #ff7a6a; }
+.fit-blurb {
+  font-size: 12px;
+  color: #d8e8f0;
+  margin-bottom: 10px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.share-btn {
+  flex: 1 1 120px;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e8f4f8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.share-btn:hover,
+.share-btn:focus-visible {
+  border-color: rgba(62,200,212,0.45);
+  background: rgba(62,200,212,0.12);
+  outline: none;
+}
+.share-btn.copied {
+  border-color: rgba(80, 220, 140, 0.55);
+  background: rgba(60, 180, 110, 0.18);
+  color: #7dffb0;
+}
+.rank-item.fit-item:hover,
+.rank-item.fit-item.active {
+  background: rgba(60, 180, 110, 0.1);
+  border-color: rgba(80, 220, 140, 0.28);
+}
+@media (max-width: 720px) {
+  .share-btn {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .fit-score-big {
+    font-size: 1.7rem !important;
+  }
+}
