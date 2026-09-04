@@ -1060,44 +1060,102 @@ body.solar-layer-on .legend-bar:not(.legend-bar-solar) { opacity: 0.35; }
     padding: 12px 12px;
   }
 
-  /* Tooltip as bottom sheet on touch */
+  /* Tooltip as FIXED bottom sheet on touch (absolute breaks on iOS Safari) */
   .tooltip-card {
+    position: fixed !important;
     left: 0 !important;
     right: 0 !important;
     top: auto !important;
     bottom: 0 !important;
     width: 100% !important;
     max-width: none !important;
-    max-height: 45vh;
+    height: auto;
+    max-height: min(70vh, 560px);
     border-radius: 18px 18px 0 0;
-    transform: translateY(110%);
+    transform: translate3d(0, 110%, 0);
     opacity: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    z-index: 45;
-    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 9999 !important;
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(6, 14, 24, 0.98) !important;
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.55);
+    visibility: hidden;
+    pointer-events: none;
   }
   .tooltip-card.visible {
     opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+    transform: translate3d(0, 0, 0);
+    pointer-events: auto !important;
+    visibility: visible;
   }
   .tooltip-card.need-card,
   .tooltip-card.reserve-card {
     width: 100% !important;
   }
   .tooltip-close {
-    display: grid;
+    display: grid !important;
     place-items: center;
+    position: absolute;
+    top: 10px;
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 5;
+    width: 44px;
+    height: 44px;
+    font-size: 28px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    color: #fff;
   }
   .tooltip-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    max-height: 45vh;
-    flex: 1;
+    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    max-height: min(70vh, 560px);
+    padding-bottom: 12px;
   }
-  .tooltip-card .tc-head { padding-right: 52px; }
+  .tooltip-card .tc-head {
+    padding: 16px 56px 12px 16px !important;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: rgba(6, 14, 24, 0.98);
+  }
+  .tooltip-card .tc-head h3 {
+    font-size: 1.35rem !important;
+    line-height: 1.25 !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    margin: 4px 0 8px !important;
+  }
+  .tooltip-card .tc-grid,
+  .tooltip-card .tc-body,
+  .tooltip-card .solar-grid {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .tooltip-card .tc-cell .v,
+  .tooltip-card .v.big {
+    font-size: 1.05rem;
+    color: #e8f4f8 !important;
+  }
+  .tooltip-card .tc-cell .k,
+  .tooltip-card .sub,
+  .tooltip-card .est-tag {
+    font-size: 12px;
+  }
+  body.mobile-ui .fn-pin {
+    padding: 14px;
+    margin: -14px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
 
   /* Need pins: hide text labels until zoomed (body class from JS) */
   body.mobile-ui .fn-pin-label { display: none !important; }

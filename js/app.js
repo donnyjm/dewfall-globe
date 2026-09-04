@@ -636,28 +636,38 @@
     state.selectedId = id;
     state.selectedKind = 'fn';
     updateRankList();
-    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.55 }, 1200);
-    const tipEv = { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 };
-    // names/info only via hover tooltip / mobile sheet
-    showFnTooltip(c, tipEv);
+    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: IS_MOBILE ? 0.7 : 1.55 }, 1200);
+    if (IS_MOBILE) {
+      setTimeout(function () {
+        showFnTooltip(c, { clientX: window.innerWidth / 2, clientY: window.innerHeight * 0.55 });
+      }, 500);
+    } else {
+      showFnTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
+    }
     bumpIdle();
   }
 
   function focusReserve(id) {
-    const r = RESERVES.find((x) => x.id === id);
+    const r = reserveById[id] || (RESERVES || []).find((x) => x.id === id);
     if (!r || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'reserve';
     globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 0.55 }, 1400);
-    if (r.hasLtdwa && r.ltdwaId && fnById[r.ltdwaId]) {
-      const c = enrichedFn.find((x) => x.id === r.ltdwaId) || Y.enrichCity(fnById[r.ltdwaId], state.season);
-      if (c && !c.needSignal) c.needSignal = needSignal(fnById[r.ltdwaId]);
-      showFnTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 }, r);
-    } else {
-      showReserveTooltip(r, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
-    }
+    const tipEv = { clientX: window.innerWidth / 2, clientY: window.innerHeight * 0.55 };
+    const show = function () {
+      if (r.hasLtdwa && r.ltdwaId && fnById[r.ltdwaId]) {
+        const c = enrichedFn.find((x) => x.id === r.ltdwaId) || Y.enrichCity(fnById[r.ltdwaId], state.season);
+        if (c && !c.needSignal) c.needSignal = needSignal(fnById[r.ltdwaId]);
+        showFnTooltip(c, tipEv, r);
+      } else {
+        showReserveTooltip(r, tipEv);
+      }
+    };
+    if (IS_MOBILE) setTimeout(show, 500);
+    else show();
     bumpIdle();
   }
+
 
   function coldClimateCaveat(c) {
     if (c.remoteness === 'remote-northern' || (c.lat && c.lat >= 53) || c.highlightNorthern) {
@@ -892,11 +902,18 @@
         document.body.style.cursor = 'default';
       });
     }
-    el.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      ev.preventDefault();
+    function openFn(ev) {
+      if (ev) {
+        ev.stopPropagation();
+        if (ev.cancelable) ev.preventDefault();
+      }
       focusFn(c.id);
-    });
+    }
+    el.addEventListener('click', openFn);
+    el.addEventListener('touchend', function (ev) {
+      // iOS: HTML overlays on WebGL often miss click; touchend is reliable
+      openFn(ev);
+    }, { passive: false });
     return el;
   }
 
@@ -1062,7 +1079,6 @@
 
   function pinTooltip(ev) {
     positionTooltip(ev);
-    tooltipEl.classList.add('visible');
     state.tooltipPinned = !!IS_MOBILE;
     if (IS_MOBILE) {
       closeSheets();
@@ -1072,6 +1088,15 @@
         backdrop.classList.add('show');
         backdrop.setAttribute('aria-hidden', 'false');
       }
+      // iOS Safari: force layout before adding .visible so translate3d animates
+      tooltipEl.classList.remove('visible');
+      void tooltipEl.offsetHeight;
+      tooltipEl.classList.add('visible');
+      // scroll sheet content to top so name is visible
+      const body = tooltipContentEl();
+      if (body) body.scrollTop = 0;
+    } else {
+      tooltipEl.classList.add('visible');
     }
   }
 
