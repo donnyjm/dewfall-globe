@@ -1406,3 +1406,43 @@ body.solar-layer-on .legend-bar:not(.legend-bar-solar) { opacity: 0.35; }
 
 /* FORCE no on-globe name labels — names only in hover/tap cards */
 .fn-pin-label { display: none !important; }
+
+/* Selected Water Need — always show name + beacon so fly-to is obvious */
+.fn-pin.selected .fn-pin-label-selected {
+  display: block !important;
+  font: 800 13px/1.2 system-ui, sans-serif;
+  color: #1a1200;
+  background: #ffe566;
+  border: 2px solid #fff;
+  padding: 5px 10px;
+  border-radius: 8px;
+  max-width: 200px;
+  box-shadow: 0 0 0 3px rgba(255,180,0,0.45), 0 8px 24px rgba(0,0,0,0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fn-pin-beacon {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  width: 3px;
+  height: 28px;
+  margin-left: -1.5px;
+  background: linear-gradient(180deg, #ffe566, rgba(255,180,40,0.1));
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(255,220,100,0.9);
+}
+.fn-pin.selected .fn-pin-dot {
+  width: 28px !important;
+  height: 28px !important;
+}
+body.mobile-ui .fn-pin.selected .fn-pin-dot {
+  width: 32px !important;
+  height: 32px !important;
+}
+body.mobile-ui .fn-pin.selected .fn-pin-label-selected {
+  display: block !important;
+  font-size: 14px;
+}

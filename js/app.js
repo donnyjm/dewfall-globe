@@ -801,15 +801,27 @@
     state.selectedId = id;
     state.selectedKind = 'fn';
     updateRankList();
-    applyLayers();
-    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: IS_MOBILE ? 0.7 : 1.55 }, 1200);
-    if (IS_MOBILE) {
-      setTimeout(function () {
-        showFnTooltip(c, { clientX: window.innerWidth / 2, clientY: window.innerHeight * 0.55 });
-      }, 500);
-    } else {
-      showFnTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
+    // Stop spinning so the pin stays in frame
+    state.autoRotate = false;
+    if (globe.controls) {
+      try { globe.controls().autoRotate = false; } catch (e) {}
     }
+    const rot = document.getElementById('layer-rotate');
+    if (rot) rot.checked = false;
+    applyLayers();
+    // Close enough that one pin fills attention (was too high — felt like a vague pan)
+    const alt = IS_MOBILE ? 0.28 : 0.32;
+    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
+    // Re-apply after camera settles so HTML pin + beacon render in the new frustum
+    setTimeout(function () {
+      state.altitude = alt;
+      state.closeZoom = true;
+      applyLayers();
+      showFnTooltip(c, {
+        clientX: window.innerWidth / 2,
+        clientY: IS_MOBILE ? window.innerHeight * 0.55 : window.innerHeight / 2 - 40
+      });
+    }, 1450);
     bumpIdle();
   }
 
@@ -900,6 +912,21 @@
       });
     }
 
+    // Tall gold beacon pillar for selected Water Need
+    if (state.selectedKind === 'fn' && state.selectedId) {
+      const sel = enrichedFn.find((x) => x.id === state.selectedId);
+      if (sel) {
+        pts.push({
+          kind: 'need-beacon',
+          id: 'beacon-' + sel.id,
+          lat: sel.lat,
+          lng: sel.lng,
+          yield: { yieldMid: 1 },
+          _fn: sel,
+        });
+      }
+    }
+
     if (pts.length) {
       const reserveR = IS_MOBILE
         ? (state.altitude > 1.1 ? 0.04 : 0.055)
@@ -911,10 +938,12 @@
         .pointLat('lat')
         .pointLng('lng')
         .pointAltitude((d) => {
+          if (d.kind === 'need-beacon') return 0.28;
           if (d.kind === 'reserve') return 0.0025;
           return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
         })
         .pointRadius((d) => {
+          if (d.kind === 'need-beacon') return 0.55;
           if (d.kind === 'reserve') {
             const dens = (d.density != null ? d.density : (d._res && d._res.density)) || 0;
             return reserveR * (1 + Math.min(0.35, dens / 140));
@@ -922,6 +951,7 @@
           return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
         })
         .pointColor((d) => {
+          if (d.kind === 'need-beacon') return '#ffd24a';
           if (d.kind === 'reserve') {
             if (state.layers.solar) {
               const sol = d._solar || siteSolar(d.lat, d.lng, state.season, null);
@@ -940,7 +970,8 @@
         .onPointHover(IS_MOBILE ? function () {} : onPointHover)
         .onPointClick((d) => {
           if (!d) return;
-          if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
+          if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
+          else if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
           else if (d.kind === 'city' || d._city) focusCity(d.id || (d._city && d._city.id));
         });
     } else {
@@ -984,17 +1015,21 @@
         });
       });
     }
-    // Single pulse ring ONLY on the selected water-need site
+    // Loud locator rings ONLY on the selected water-need site
     if (state.layers.ltdwa && state.selectedKind === 'fn' && state.selectedId) {
       const sel = enrichedFn.find((c) => c.id === state.selectedId);
       if (sel) {
-        mist.push({
-          lat: sel.lat,
-          lng: sel.lng,
-          maxR: 2.6,
-          propagationSpeed: 1.15,
-          repeatPeriod: 850,
-          color: function () { return 'rgba(255, 220, 100, 0.55)'; },
+        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
+          mist.push({
+            lat: sel.lat,
+            lng: sel.lng,
+            maxR: maxR,
+            propagationSpeed: 0.9 + i * 0.25,
+            repeatPeriod: 700 + i * 200,
+            color: function () {
+              return i === 0 ? 'rgba(255, 240, 140, 0.85)' : 'rgba(255, 180, 40, 0.55)';
+            },
+          });
         });
       }
     }
@@ -1014,13 +1049,15 @@
     }
     if (state.layers.ltdwa) {
       visibleFn().forEach((c) => {
-        htmlItems.push({ kind: 'fn', lat: c.lat, lng: c.lng, city: c });
+        const selected = state.selectedKind === 'fn' && state.selectedId === c.id;
+        htmlItems.push({ kind: 'fn', lat: c.lat, lng: c.lng, city: c, selected: selected });
       });
     }
 
     if (htmlItems.length) {
       globe.htmlElementsData(htmlItems)
-        .htmlLat('lat').htmlLng('lng').htmlAltitude(0.018)
+        .htmlLat('lat').htmlLng('lng')
+        .htmlAltitude((d) => (d.selected ? 0.06 : 0.018))
         .htmlElement((d) => {
           if (d.kind === 'dp') {
             const el = document.createElement('div');
@@ -1054,9 +1091,14 @@
     el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (state.layers.northern && isNorth ? ' emphasis' : '') +
       (isSelected ? ' selected' : '');
-    el.title = ''; // no native tooltip clutter; name only via hover/tap card
-    // Dot only — never paint name labels on the globe (too busy)
-    el.innerHTML = '<span class="fn-pin-dot"></span>';
+    el.title = '';
+    // Dot only — except the SELECTED water-need site shows its name as a locator
+    if (isSelected) {
+      el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
+        escapeHtml(shortName(c.name)) + '</span>';
+    } else {
+      el.innerHTML = '<span class="fn-pin-dot"></span>';
+    }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
         showFnTooltip(c, ev);
