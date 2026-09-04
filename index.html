@@ -7,9 +7,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#050a12" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
   <title>DEWFALL · Where water falls from air</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=1788559704" />
 </head>
 <body>
   <div id="loader" class="loader" aria-live="polite">
@@ -31,6 +32,10 @@
         <p>Mekilok · North Vancouver · Alpha AWG</p>
       </div>
     </div>
+    <button type="button" class="search-launch" id="btn-search" aria-expanded="false" aria-controls="panel-search" title="Search locations">
+      <span class="search-launch-icon" aria-hidden="true">⌕</span>
+      <span>Search</span>
+    </button>
     <div class="disclaimer-banner" id="disclaimer-banner">
       <strong>Model estimates only.</strong>
       Yields are climate-based projections — not measured.
@@ -51,6 +56,7 @@
   <div class="mobile-fabs" id="mobile-fabs" aria-label="Mobile panels">
     <button type="button" class="fab" id="fab-layers" aria-expanded="false" aria-controls="panel-controls">Layers</button>
     <button type="button" class="fab fab-list" id="fab-list" aria-expanded="false" aria-controls="panel-rank">List</button>
+    <button type="button" class="fab fab-search" id="fab-search" aria-expanded="false" aria-controls="panel-search">Search</button>
   </div>
 
   <aside class="panel controls" id="panel-controls" aria-label="Map controls">
@@ -102,6 +108,20 @@
     <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
   </aside>
 
+
+  <aside class="panel search-panel" id="panel-search" aria-label="Location search" hidden>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2>Search locations</h2>
+      <button type="button" class="sheet-close" id="close-search" aria-label="Close search">×</button>
+    </div>
+    <div class="search-field">
+      <input type="search" id="search-input" placeholder="Community, reserve, city, province…" autocomplete="off" enterkeyhint="search" aria-label="Search locations" />
+    </div>
+    <div id="search-results" class="search-results" role="listbox" aria-label="Search results"></div>
+    <p class="search-hint" id="search-hint">Type to find water-need sites, reserves, or yield cities.</p>
+  </aside>
+
   <aside class="panel rank-panel" id="panel-rank" aria-label="Rankings">
     <div class="sheet-handle" aria-hidden="true"></div>
     <header>
@@ -139,6 +159,7 @@
     <div class="tooltip-body" id="tooltip-body"></div>
   </div>
 
-  <script src="js/loader.js"></script>
+  <script src="js/updater.js?v=1788559704"></script>
+  <script src="js/loader.js?v=1788559704"></script>
 </body>
 </html>

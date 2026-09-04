@@ -4,6 +4,12 @@
 (function () {
   'use strict';
 
+  var CACHE_BUST = '1788559704';
+  function withBust(url) {
+    if (!url || /^https?:/i.test(url)) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;
+  }
+
   var LOCAL = { three: 'vendor/three.min.js', globe: 'vendor/globe.gl.min.js' };
   var CDN = {
     three: 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
@@ -53,7 +59,7 @@
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var el = document.createElement('script');
-      el.src = src;
+      el.src = withBust(src);
       el.async = false;
       el.onload = function () { resolve(src); };
       el.onerror = function () { reject(new Error('Failed to load ' + src)); };
