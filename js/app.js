@@ -817,6 +817,317 @@
     return { score, label, blurb, need01, yield01, yMid };
   }
 
+
+  /** Coarse country-level income bands for fallback when site-socio missing. */
+  const COUNTRY_INCOME_PROXY = {
+    USA: { band: 'USD middle (national proxy)', note: 'national ACS/GNI proxy — not local' },
+    US: { band: 'USD middle (national proxy)', note: 'national ACS/GNI proxy — not local' },
+    Canada: { band: 'CAD middle (national proxy)', note: 'national proxy — not community' },
+    CA: { band: 'CAD middle (national proxy)', note: 'national proxy — not community' },
+    Australia: { band: 'AUD middle (national proxy)', note: 'national ABS/GNI proxy' },
+    Mexico: { band: 'MXN lower-middle–middle (national)', note: 'national GNI proxy' },
+    Chile: { band: 'CLP middle (national proxy)', note: 'national GNI proxy' },
+    'South Africa': { band: 'ZAR lower-middle (national)', note: 'national GNI proxy — high inequality' },
+    Israel: { band: 'ILS middle (national proxy)', note: 'national GNI proxy' },
+    Spain: { band: 'EUR middle (national proxy)', note: 'national GNI proxy' },
+    UAE: { band: 'AED middle–upper (national)', note: 'national GNI proxy' },
+    'Saudi Arabia': { band: 'SAR middle (national proxy)', note: 'national GNI proxy' },
+    Brazil: { band: 'BRL lower-middle (national)', note: 'national GNI proxy' },
+    Peru: { band: 'PEN lower-middle (national)', note: 'national GNI proxy' },
+    Bolivia: { band: 'BOB low–lower-middle (national)', note: 'national GNI proxy' },
+    Botswana: { band: 'BWP lower-middle (national)', note: 'national GNI proxy' },
+    Tanzania: { band: 'TZS low (national)', note: 'national GNI proxy' },
+    Namibia: { band: 'NAD lower-middle (national)', note: 'national GNI proxy' },
+    Greenland: { band: 'DKK middle (Greenland proxy)', note: 'municipal / national proxy' },
+    Kiribati: { band: 'AUD-equivalent low–lower-middle', note: 'national GNI proxy' },
+    Tuvalu: { band: 'AUD-equivalent low–lower-middle', note: 'national GNI proxy' },
+    'Marshall Islands': { band: 'USD low–lower-middle', note: 'national GNI proxy' },
+    'New Zealand': { band: 'NZD middle (national proxy)', note: 'national GNI proxy' }
+  };
+
+  function formatPopulation(n) {
+    if (n == null || n === '' || isNaN(Number(n))) return null;
+    const v = Number(n);
+    if (v >= 1000000) {
+      const m = v / 1000000;
+      return '~' + (m >= 10 ? Math.round(m) : (Math.round(m * 10) / 10)) + 'M';
+    }
+    if (v >= 10000) return '~' + Math.round(v / 1000) + 'k';
+    if (v >= 1000) return '~' + (Math.round(v / 100) / 10) + 'k';
+    return '~' + String(Math.round(v));
+  }
+
+  function socioFor(c) {
+    if (!c) return { populationLabel: '—', incomeLabel: '—', populationNote: '', incomeNote: '', source: '' };
+    const table = window.DEWFALL_SITE_SOCIO || {};
+    const hit = table[c.id];
+    if (hit) {
+      const popLabel = hit.population != null
+        ? (formatPopulation(hit.population) + (hit.populationNote ? ' · ' + hit.populationNote : ''))
+        : (hit.populationNote || '—');
+      return {
+        population: hit.population,
+        populationLabel: popLabel || '—',
+        populationNote: hit.populationNote || '',
+        incomeBand: hit.incomeBand || '',
+        incomeLabel: hit.incomeBand || '—',
+        incomeNote: hit.incomeNote || '',
+        source: hit.source || '',
+        sourceUrl: hit.sourceUrl || '',
+        fromTable: true
+      };
+    }
+    // Fallbacks — never invent precise incomes
+    let population = null;
+    let populationNote = '';
+    let populationLabel = '—';
+    if (c.homes != null && !isNaN(Number(c.homes)) && Number(c.homes) > 0) {
+      population = Math.round(Number(c.homes) * 3);
+      populationNote = 'est. community (homes×3)';
+      populationLabel = formatPopulation(population) + ' · ' + populationNote;
+    } else if (c.populationNote) {
+      populationLabel = String(c.populationNote);
+      populationNote = String(c.populationNote);
+    } else if (c.homesImpactNote) {
+      populationLabel = String(c.homesImpactNote);
+    }
+
+    const country = c.country || (c.kind === 'fn' || (c.id && String(c.id).indexOf('fn-') === 0) ? 'Canada' : '');
+    const proxy = COUNTRY_INCOME_PROXY[country] || null;
+    let incomeLabel = '—';
+    let incomeNote = '';
+    if (c.kind === 'fn' || (c.id && String(c.id).indexOf('fn-') === 0)) {
+      incomeLabel = 'CAD low–moderate';
+      incomeNote = 'provincial Indigenous proxy — not band-specific';
+    } else if (proxy) {
+      incomeLabel = proxy.band;
+      incomeNote = proxy.note;
+    }
+
+    return {
+      population: population,
+      populationLabel: populationLabel,
+      populationNote: populationNote,
+      incomeBand: incomeLabel !== '—' ? incomeLabel : '',
+      incomeLabel: incomeLabel,
+      incomeNote: incomeNote,
+      source: 'runtime fallback',
+      sourceUrl: '',
+      fromTable: false
+    };
+  }
+
+  function fundersForSite(c) {
+    const list = window.DEWFALL_FUNDERS || [];
+    if (!c || !list.length) return [];
+    const id = String(c.id || '').toLowerCase();
+    const name = String(c.name || '').toLowerCase();
+    const country = String(c.country || '').toLowerCase();
+    const region = String(c.region || c.province || '').toLowerCase();
+    const people = String(c.people || '').toLowerCase();
+    const hay = [id, name, country, region, people, String(c.altNames || ''), String(c.notes || ''), String(c.note || ''), String(c.why || '')].join(' ').toLowerCase();
+    const isDrought = c.kind === 'drought' || id.indexOf('drought-') === 0;
+    const isFn = c.kind === 'fn' || id.indexOf('fn-') === 0;
+    const isWorld = c.kind === 'world' || !!c.world;
+    const isIndigenous = isFn ||
+      /indigenous|aboriginal|first nation|tribal|navajo|din[eé]|hopi|yanomami|maasai|himba|inuit|māori|maori|shipibo|aymara|yaqui|gwich|yup'?ik|iñupiat|inupiat/i.test(hay) ||
+      (c.kindIssue === 'indigenous' || c.kindIssue === 'both');
+
+    // Primary geography buckets (strict)
+    const buckets = new Set();
+    if (isFn || /canada/.test(country) || id.indexOf('fn-') === 0) {
+      buckets.add('canada');
+      if (c.province) buckets.add('prov:' + String(c.province).toUpperCase());
+    }
+    if (/usa|united states/.test(country) || id.indexOf('usa-') === 0 || (isDrought && /usa|united states/.test(country))) {
+      buckets.add('usa');
+    }
+    if (isDrought && /usa|united states/.test(country)) buckets.add('usa-drought');
+    if (/australia/.test(country) || id.indexOf('aus-') === 0) buckets.add('australia');
+    if (/northern territory|\bnt\b/.test(region) || /aus-(laramba|willowra|yuendumu|angurugu|numbulwar|wilora|yuelamu|alpurrurulam|nauiyu|wugularr|engawala|bulla|nyirripi)/.test(id)) {
+      buckets.add('australia-nt');
+    }
+    if (/western australia/.test(region) || /aus-(kiwirrkurra|pandanus|warburton|jigalong|ngumpan|mulan|wanarn|kunawarritji|wingellina|blackstone|yandeyarra|burringurrah|pia-wadjari|tjukurla|bow-river|tjuntjuntjara)/.test(id)) {
+      buckets.add('australia-wa');
+    }
+    if (/navajo|din[eé]|shiprock|thoreau|dilkon|crownpoint|oljato|leupp|dennehotso|tolani|pueblo-pintado|counselor/.test(hay)) buckets.add('navajo');
+    if (/alaska|chefornak|kipnuk|kivalina|newtok|shishmaref|yup|iñupiat|inupiat|alatna|allakaket|tuntutuliak/.test(hay)) buckets.add('alaska');
+    if (/brazil|yanomami|roraima/.test(hay)) buckets.add('brazil');
+    if (/peru|shipibo|matsigenka|nanay|cusco|espinar/.test(hay)) buckets.add('peru');
+    if (/bolivia|aymara|tiquipa/.test(hay)) buckets.add('bolivia');
+    if (((/yaqui|sonora/.test(hay) || (/mexico/.test(hay) && !/new mexico/.test(hay))) && !/new mexico/.test(region)) || (isDrought && /mexico/i.test(country))) buckets.add('mexico');
+    if (/chile|santiago/.test(hay) || (isDrought && /chile/.test(country))) buckets.add('chile');
+    if (/botswana|tanzania|namibia|south africa|cape town|maasai|himba|africa/.test(hay) || (isDrought && /south africa/.test(country))) buckets.add('africa');
+    if (/kiribati|tuvalu|marshall|pacific|tarawa|funafuti|majuro/.test(hay)) buckets.add('pacific');
+    if (/arizona/.test(region) || /drought-(phoenix|tucson|yuma|prescott)/.test(id)) buckets.add('arizona');
+    if (/california/.test(region) || /drought-(los-angeles|san-diego|inland-empire|bakersfield|fresno|palm-springs)/.test(id)) buckets.add('california');
+    if (/new zealand|māori|maori|ruatoki|havelock/.test(hay)) buckets.add('nz');
+    if (/greenland/.test(hay)) buckets.add('greenland');
+    buckets.add('global');
+
+    function funderBuckets(f) {
+      const geos = f.geographies || [];
+      const out = new Set();
+      geos.forEach(function (g) {
+        const x = String(g).toLowerCase();
+        if (x === 'global') out.add('global');
+        if (x === 'can' || x === 'canada' || x === 'fn') out.add('canada');
+        if (x === 'us' || x === 'usa' || x === 'tribal') out.add('usa');
+        if (x === 'navajo') out.add('navajo');
+        if (x === 'alaska') out.add('alaska');
+        if (x === 'au' || x === 'australia' || x === 'aboriginal') out.add('australia');
+        if (x === 'nt' || x === 'northern territory') out.add('australia-nt');
+        if (x === 'wa' || x === 'western australia') out.add('australia-wa');
+        if (x === 'br' || x === 'brazil' || x === 'amazon' || x === 'yanomami') out.add('brazil');
+        if (x === 'pe' || x === 'peru') out.add('peru');
+        if (x === 'bo' || x === 'bolivia') out.add('bolivia');
+        if (x === 'mx' || x === 'mexico') out.add('mexico');
+        if (x === 'cl' || x === 'chile') out.add('chile');
+        if (x === 'latam') { out.add('brazil'); out.add('peru'); out.add('bolivia'); out.add('mexico'); out.add('chile'); }
+        if (x === 'africa' || x === 'za' || x === 'south africa' || x === 'bw' || x === 'botswana' || x === 'tz' || x === 'tanzania' || x === 'na' || x === 'namibia') out.add('africa');
+        if (x === 'pacific') out.add('pacific');
+        if (x === 'az' || x === 'arizona') out.add('arizona');
+        if (x === 'ca' || x === 'california') out.add('california');
+        if (x === 'mb' || x === 'on' || x === 'sk' || x === 'ab' || x === 'bc' || x === 'qc' || x === 'nb' || x === 'nl') out.add('prov:' + x.toUpperCase());
+      });
+      return out;
+    }
+
+    const themeWant = new Set();
+    if (isIndigenous) { themeWant.add('indigenous'); themeWant.add('need'); themeWant.add('water'); themeWant.add('wash'); themeWant.add('infrastructure'); }
+    if (isDrought) { themeWant.add('drought'); themeWant.add('commercial'); themeWant.add('municipal'); themeWant.add('climate'); themeWant.add('procurement'); themeWant.add('energy'); }
+    if (isWorld || isFn) { themeWant.add('need'); themeWant.add('water'); themeWant.add('infrastructure'); themeWant.add('wash'); }
+    if (/climate|drought|arid|adaptation/.test(hay)) themeWant.add('climate');
+
+    const PARENT = { usa: 1, canada: 1, australia: 1, global: 1, 'usa-drought': 1 };
+    const scored = list.map(function (f) {
+      const fb = funderBuckets(f);
+      const themes = f.themes || [];
+      const fbList = [];
+      fb.forEach(function (b) { fbList.push(b); });
+      // Province tags alone should not force province-exact match for national Canada orgs
+      const specifics = fbList.filter(function (b) {
+        return !PARENT[b] && b.indexOf('prov:') !== 0;
+      });
+      let geoHits = 0;
+      let parentHit = false;
+      let specificHit = false;
+      fbList.forEach(function (b) {
+        if (b === 'global') return;
+        if (!buckets.has(b)) return;
+        geoHits += 1;
+        if (PARENT[b]) parentHit = true;
+        else specificHit = true;
+      });
+      // If funder has specific regions (navajo, arizona, brazil…), require a specific hit —
+      // parent-only (usa/canada/australia) is not enough for Navajo-only or CA-board orgs.
+      let localHit = specifics.length ? specificHit : parentHit;
+      // Navajo-only / DigDeep-style orgs: if their ONLY tribal specifics are navajo (+states),
+      // require navajo. Multi-region agencies (IHS with alaska+navajo) keep specificHit.
+      if (fb.has('navajo') && !buckets.has('navajo')) {
+        const tribalSpecs = specifics.filter(function (b) {
+          return b === 'navajo' || b === 'alaska' || b === 'arizona' || b === 'california';
+        });
+        const onlyNavajo = tribalSpecs.length > 0 && tribalSpecs.every(function (b) {
+          return b === 'navajo' || b === 'arizona' || b === 'california'; // AZ/NM states ride with Navajo-Gallup
+        });
+        if (onlyNavajo) localHit = false;
+      }
+
+      const isGlobalOnly = fb.size === 1 && fb.has('global');
+      const hasGlobal = fb.has('global');
+
+      if (!localHit && !hasGlobal && !isGlobalOnly) return null;
+      if (!localHit && !isGlobalOnly) {
+        // multi-region + global tag → allow as soft global for world/drought only
+        if (!(hasGlobal && (isWorld || isDrought))) return null;
+      }
+      if (!localHit && !hasGlobal) return null;
+
+      let score = 0;
+      if (localHit) score += 20 + geoHits * 6;
+      if (specificHit) score += 10;
+      if (isGlobalOnly || (!localHit && hasGlobal)) score += 3;
+
+      for (let ti = 0; ti < themes.length; ti++) {
+        if (themeWant.has(themes[ti])) score += 4;
+      }
+      if (isDrought && (f.kind === 'commercial' || themes.indexOf('commercial') >= 0 || themes.indexOf('procurement') >= 0 || themes.indexOf('drought') >= 0 || themes.indexOf('municipal') >= 0)) score += 12;
+      if (isIndigenous && themes.indexOf('indigenous') >= 0 && localHit) score += 14;
+      if (isFn && fb.has('canada')) score += 12;
+      if (buckets.has('navajo') && fb.has('navajo')) score += 16;
+      if (buckets.has('alaska') && fb.has('alaska')) score += 16;
+      if (isDrought && themes.indexOf('indigenous') >= 0 && !isIndigenous) score -= 20;
+      if (isDrought && f.kind === 'ngo' && themes.indexOf('wash') >= 0 && !isIndigenous) score -= 8;
+      if (!isDrought && f.id === 'muni-procurement') score -= 10;
+      if (isGlobalOnly) score -= 2;
+      if (themes.indexOf('indigenous') >= 0 && !localHit) score -= 30;
+      // Soft-global (no local hit): keep score low so they only fill slots
+      if (!localHit && hasGlobal) score = Math.min(score, 8);
+      return { f: f, score: score, localHit: localHit };
+    }).filter(function (x) { return x && x.score > 0; });
+
+    scored.sort(function (a, b) {
+      if (b.localHit !== a.localHit) return a.localHit ? -1 : 1;
+      return b.score - a.score;
+    });
+    const out = [];
+    const seen = {};
+    for (let i = 0; i < scored.length && out.length < 5; i++) {
+      const f = scored[i].f;
+      if (seen[f.id]) continue;
+      // For drought commercial markets, skip Indigenous / tribal-need agencies
+      if (isDrought && !isIndigenous) {
+        const th = f.themes || [];
+        const blob = String(f.name || '') + ' ' + String(f.note || '');
+        if (th.indexOf('indigenous') >= 0 || /tribal|first nations|navajo water/i.test(blob)) {
+          if (th.indexOf('commercial') < 0 && th.indexOf('drought') < 0 && th.indexOf('procurement') < 0) {
+            continue;
+          }
+        }
+      }
+      seen[f.id] = true;
+      out.push(f);
+    }
+    if (out.length < 2) {
+      list.filter(function (f) {
+        const fb = funderBuckets(f);
+        return fb.size === 1 && fb.has('global');
+      }).slice(0, 3).forEach(function (f) {
+        if (out.length < 3 && !seen[f.id]) { seen[f.id] = true; out.push(f); }
+      });
+    }
+    return out.slice(0, 5);
+  }
+
+  function socioCellsHtml(socio) {
+    const pop = escapeHtml(socio.populationLabel || '—');
+    const inc = escapeHtml(socio.incomeLabel || '—');
+    return '<div class="tc-cell"><div class="k">Population</div><div class="v">' + pop + '</div></div>' +
+      '<div class="tc-cell"><div class="k">Income</div><div class="v">' + inc + '</div></div>';
+  }
+
+  function fundersSectionHtml(funders) {
+    if (!funders || !funders.length) return '';
+    const items = funders.map(function (f) {
+      const name = escapeHtml(f.name);
+      const note = f.note ? '<span class="funder-note">' + escapeHtml(f.note) + '</span>' : '';
+      const link = f.url
+        ? ('<a href="' + escapeHtml(f.url) + '" target="_blank" rel="noopener">' + name + '</a>')
+        : name;
+      return '<li>' + link + note + '</li>';
+    }).join('');
+    return '<div class="funders-block">' +
+      '<div class="funders-title">Who can fund this area</div>' +
+      '<ul class="funders-list">' + items + '</ul>' +
+      '</div>';
+  }
+
+  function socioHonestyHtml() {
+    return '<div class="socio-honesty">Population/income are estimates or regional proxies — not a credit check. Funders listed are starting points, not commitments.</div>';
+  }
+
+
   function sitePermalink(id) {
     let base;
     if (/donnyjm\.github\.io/i.test(location.hostname)) {
@@ -862,33 +1173,49 @@
     if (c.kind === 'drought' || (c.id && String(c.id).indexOf('drought-') === 0)) {
       const fit = c.fit || commercialFitFor(c);
       const src = c.source || (getDroughtMeta().sourceLabel || 'drought markets');
+      const socioD = socioFor(c);
+      const fundersD = fundersForSite(c);
+      const fundersLineD = fundersD.length
+        ? ('Funders (starting points): ' + fundersD.map(function (f) { return f.name; }).join('; '))
+        : null;
       return [
         'DEWFALL market card — ' + (c.name || 'market'),
         siteXmlocation(c),
         'MARKET · drought / arid demand (commercial beachhead)',
         'Tier ' + (c.tier || '?') + ' · ' + (c.drought || 'arid') + ' · ' + (c.why || ''),
+        'Population: ' + (socioD.populationLabel || '—'),
+        'Income: ' + (socioD.incomeLabel || '—') + (socioD.incomeNote ? ' (' + socioD.incomeNote + ')' : ''),
         'Commercial fit: ' + fit.score + ' · ' + fit.label,
         'Modeled yield (' + state.season + '): ' + y.yieldLo + '–' + y.yieldHi + ' L/day (model estimate)',
         'Solar untapped (TEC branch): ' + untapped + ' model',
+        fundersLineD,
         'Source: ' + src + srcUrl,
         'Map: ' + sitePermalink(c.id),
-        '— Mekilok / DEWFALL · buy market, not advisory-need · model estimates only'
-      ].join('\n');
+        '— Mekilok / DEWFALL · buy market, not advisory-need · pop/income proxies · funders are starting points'
+      ].filter(Boolean).join('\n');
     }
     const fit = c.fit || fitScoreFor(c);
     const issue = c.issue || advisoryLabel(c.advisoryTypeRaw || c.advisoryType) || 'documented water access gap';
     const src = c.source || (c.world ? (getWorldMeta().sourceLabel || 'curated list') : (FN_META.sourceLabel || 'ISC / FNHA'));
+    const socioN = socioFor(c);
+    const fundersN = fundersForSite(c);
+    const fundersLineN = fundersN.length
+      ? ('Funders (starting points): ' + fundersN.map(function (f) { return f.name; }).join('; '))
+      : null;
     return [
       'DEWFALL site card — ' + (c.name || 'site'),
       siteXmlocation(c),
       'Need: ' + issue,
+      'Population: ' + (socioN.populationLabel || '—'),
+      'Income: ' + (socioN.incomeLabel || '—') + (socioN.incomeNote ? ' (' + socioN.incomeNote + ')' : ''),
       'Fit: ' + fit.score + ' · ' + fit.label,
       'Modeled yield (' + state.season + '): ' + y.yieldLo + '–' + y.yieldHi + ' L/day (model estimate)',
       'Solar untapped (TEC branch): ' + untapped + ' model',
+      fundersLineN,
       'Source: ' + src + srcUrl,
       'Map: ' + sitePermalink(c.id),
-      '— Mekilok / DEWFALL · model estimates only; not measured'
-    ].join('\n');
+      '— Mekilok / DEWFALL · model estimates only; pop/income proxies; funders are starting points'
+    ].filter(Boolean).join('\n');
   }
 
   function copyText(text, btn) {
@@ -1985,6 +2312,8 @@
     const y = c.yield;
     const fit = c.fit || fitScoreFor(c);
     if (!c.fit) c.fit = fit;
+    const socio = socioFor(c);
+    const funders = fundersForSite(c);
     const homes = c.homes != null ? String(c.homes) : (c.populationNote || c.homesImpactNote || 'see systems');
     const since = c.longTermSince || c.dateSet || 'see source';
     const systems = (c.systems || []).map(escapeHtml).join('<br/>');
@@ -2014,7 +2343,8 @@
       '</div>' +
       '<div class="tc-grid">' +
         fitScoreCellHtml(fit) +
-        '<div class="tc-cell"><div class="k">Population / homes</div><div class="v">' + escapeHtml(homes) + '</div></div>' +
+        socioCellsHtml(socio) +
+        '<div class="tc-cell"><div class="k">Homes (advisory)</div><div class="v">' + escapeHtml(homes) + '</div></div>' +
         '<div class="tc-cell"><div class="k">' + (c.term === 'short' ? 'Date set' : 'Long-term since') + '</div><div class="v">' + escapeHtml(since) + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under local climate</div><div class="v big need-yield">' +
           y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model)</span></div></div>' +
@@ -2026,6 +2356,8 @@
         '<div class="systems"><strong>System(s):</strong><br/>' + systems + '</div>' +
         '<div class="why cold-caveat">' + escapeHtml(coldClimateCaveat(c)) + '</div>' +
         (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
+        fundersSectionHtml(funders) +
+        socioHonestyHtml() +
         solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
@@ -2047,6 +2379,8 @@
     const y = c.yield;
     const fit = c.fit || fitScoreFor(c);
     if (!c.fit) c.fit = fit;
+    const socio = socioFor(c);
+    const funders = fundersForSite(c);
     const people = c.people ? escapeHtml(c.people) : '—';
     const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
     const issue = escapeHtml(c.issue || 'documented water access gap');
@@ -2067,7 +2401,8 @@
       '</div>' +
       '<div class="tc-grid">' +
         fitScoreCellHtml(fit) +
-        '<div class="tc-cell"><div class="k">People</div><div class="v">' + people + '</div></div>' +
+        socioCellsHtml(socio) +
+        '<div class="tc-cell"><div class="k">People / group</div><div class="v">' + people + '</div></div>' +
         '<div class="tc-cell"><div class="k">Issue</div><div class="v">' + issue + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
           y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
@@ -2077,6 +2412,8 @@
       '<div class="tc-body">' +
         '<div class="fit-blurb">' + escapeHtml(fit.blurb) + '</div>' +
         (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
+        fundersSectionHtml(funders) +
+        socioHonestyHtml() +
         '<div class="why cold-caveat">Climate inputs are lat-band stubs (not weather-station normals). Yield is a model estimate only — this pin marks documented water NEED.</div>' +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
@@ -2096,11 +2433,12 @@
     const y = c.yield;
     const fit = c.fit || commercialFitFor(c);
     if (!c.fit) c.fit = fit;
+    const socio = socioFor(c);
+    const funders = fundersForSite(c);
     const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
     const srcHtml = c.sourceUrl
       ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
       : escapeHtml(c.source || getDroughtMeta().sourceLabel || 'drought markets');
-    const pop = c.populationNote ? escapeHtml(c.populationNote) : '—';
     const tierBadge = '<span class="badge drought-tier">Tier ' + escapeHtml(String(c.tier || '?')) + '</span>';
     const droughtBadge = '<span class="badge drought-badge">' + escapeHtml(String(c.drought || 'arid')) + '</span>';
 
@@ -2116,8 +2454,9 @@
       '</div>' +
       '<div class="tc-grid">' +
         fitScoreCellHtml(fit) +
-        '<div class="tc-cell"><div class="k">Population</div><div class="v">' + pop + '</div></div>' +
+        socioCellsHtml(socio) +
         '<div class="tc-cell"><div class="k">Yield hint</div><div class="v">' + escapeHtml(c.yieldHint || '—') + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Market note</div><div class="v">' + escapeHtml(c.populationNote || 'metro') + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
           y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
         '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
@@ -2126,6 +2465,8 @@
       '<div class="tc-body">' +
         '<div class="fit-blurb">' + escapeHtml(c.why || fit.blurb) + '</div>' +
         '<div class="why cold-caveat">This is a buy market, not an advisory-need pin. Teal diamonds mark commercial drought / arid demand — distinct from amber Indigenous / BWA need sites.</div>' +
+        fundersSectionHtml(funders) +
+        socioHonestyHtml() +
         solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +

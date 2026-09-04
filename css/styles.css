@@ -543,6 +543,54 @@ html, body {
 }
 .tc-breakdown strong { color: var(--text); font-weight: 550; }
 
+/* —— Site card funders / socio —— */
+.funders-block {
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  background: rgba(62, 200, 212, 0.06);
+  border: 1px solid rgba(62, 200, 212, 0.18);
+  border-radius: 8px;
+}
+.funders-title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.funders-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+.funders-list li {
+  margin: 0 0 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #c5d8e0;
+}
+.funders-list a {
+  color: #9ee7f0;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(158, 231, 240, 0.35);
+}
+.funders-list a:hover { color: #fff; border-bottom-color: #fff; }
+.funder-note {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 1px;
+}
+.socio-honesty {
+  margin: 6px 0 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--warn);
+  opacity: 0.92;
+}
+
+
 /* —— Bottom product strip —— */
 .product-strip {
   position: absolute;
