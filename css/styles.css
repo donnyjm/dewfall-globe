@@ -1115,3 +1115,6 @@ body.solar-layer-on .legend-bar:not(.legend-bar-solar) { opacity: 0.35; }
     max-height: min(78vh, 620px);
   }
 }
+
+/* FORCE no on-globe name labels — names only in hover/tap cards */
+.fn-pin-label { display: none !important; }

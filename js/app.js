@@ -828,9 +828,19 @@
         htmlItems.push({ kind: 'dp', lat: c.lat, lng: c.lng, city: c });
       });
     }
-    if (state.layers.ltdwa) {
+    // Need-site pulse rings only when "Northern remote highlight" is on — otherwise too busy
+    if (state.layers.ltdwa && state.layers.northern) {
       visibleFn().forEach((c) => {
-        htmlItems.push({ kind: 'fn', lat: c.lat, lng: c.lng, city: c });
+        const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
+        if (!isNorth) return;
+        mist.push({
+          lat: c.lat,
+          lng: c.lng,
+          maxR: 2.8,
+          propagationSpeed: 0.55,
+          repeatPeriod: 900,
+          color: function () { return 'rgba(255, 90, 50, 0.42)'; },
+        });
       });
     }
 
@@ -868,10 +878,9 @@
     const el = document.createElement('div');
     el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (state.layers.northern && isNorth ? ' emphasis' : '');
-    el.title = c.name;
-    // Mobile: always render label node but CSS hides until zoomed (dot-only cuts DOM paint cost)
-    el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label">' +
-      escapeHtml(shortName(c.name)) + '</span>';
+    el.title = ''; // no native tooltip clutter; name only via hover/tap card
+    // Dot only — never paint name labels on the globe (too busy)
+    el.innerHTML = '<span class="fn-pin-dot"></span>';
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
         showFnTooltip(c, ev);
