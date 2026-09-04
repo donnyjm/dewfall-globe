@@ -1772,3 +1772,36 @@ body.mobile-ui .fn-pin.selected .fn-pin-label-selected {
     font-size: 12px;
   }
 }
+
+/* Sparse layers: always-visible short names (world need + drought markets) */
+.fn-pin-label-always,
+.drought-pin-label-always {
+  display: block !important;
+  font: 700 10px/1.15 system-ui, sans-serif;
+  color: #fff6e8;
+  background: rgba(20, 12, 6, 0.88);
+  border: 1px solid rgba(255, 180, 80, 0.45);
+  padding: 2px 6px;
+  border-radius: 6px;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  margin-top: 2px;
+  text-shadow: 0 1px 2px #000;
+}
+.drought-pin-label-always {
+  border-color: rgba(64, 220, 220, 0.5);
+  background: rgba(6, 24, 28, 0.9);
+  color: #d8fffb;
+}
+.fn-pin.named,
+.drought-pin.named {
+  z-index: 2;
+}
+body.mobile-ui .fn-pin-label-always,
+body.mobile-ui .drought-pin-label-always {
+  font-size: 11px;
+  max-width: 120px;
+}

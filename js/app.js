@@ -1824,7 +1824,7 @@
       (c.issue || '') + ' ' + (c.notes || '') + ' ' + (c.advisoryType || '')
     );
     const el = document.createElement('div');
-    el.className = 'fn-pin world emphasis' + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
+    el.className = 'fn-pin world emphasis named' + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (isSelected ? ' selected' : '');
     el.title = '';
     if (isSelected) {
@@ -1832,7 +1832,8 @@
       el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
         escapeHtml(shortName(c.name)) + fitBit + '</span>';
     } else {
-      el.innerHTML = '<span class="fn-pin-dot"></span>';
+      el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-always">' +
+        escapeHtml(shortName(c.name)) + '</span>';
     }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
@@ -1863,14 +1864,15 @@
     const isSelected = state.selectedKind === 'drought' && state.selectedId === c.id;
     const tier = c.tier || 3;
     const el = document.createElement('div');
-    el.className = 'drought-pin tier-' + tier + (isSelected ? ' selected' : '');
+    el.className = 'drought-pin named tier-' + tier + (isSelected ? ' selected' : '');
     el.title = '';
     if (isSelected) {
       const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="drought-pin-beacon"></span><span class="drought-pin-diamond"></span><span class="drought-pin-label drought-pin-label-selected">' +
         escapeHtml(shortName(c.name)) + fitBit + '</span>';
     } else {
-      el.innerHTML = '<span class="drought-pin-diamond"></span>';
+      el.innerHTML = '<span class="drought-pin-diamond"></span><span class="drought-pin-label drought-pin-label-always">' +
+        escapeHtml(shortName(c.name)) + '</span>';
     }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
