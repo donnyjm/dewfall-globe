@@ -714,9 +714,10 @@ html, body {
   50% { box-shadow: 0 0 18px rgba(255,90,50,0.95); }
 }
 .fn-pin-label {
+  display: none; /* names only on hover — keep map uncluttered */
   font: 700 10px/1.15 sans-serif;
   color: #fff6e8;
-  background: rgba(30,14,6,0.9);
+  background: rgba(30,14,6,0.92);
   border: 1px solid rgba(255,160,64,0.55);
   padding: 3px 6px;
   border-radius: 4px;
@@ -724,6 +725,11 @@ html, body {
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
+}
+.fn-pin:hover .fn-pin-label,
+.fn-pin:focus-within .fn-pin-label {
+  display: block;
 }
 .fn-pin.short .fn-pin-dot { background: #ffc840; }
 .fn-pin.short .fn-pin-label {
@@ -1094,8 +1100,8 @@ body.solar-layer-on .legend-bar:not(.legend-bar-solar) { opacity: 0.35; }
   .tooltip-card .tc-head { padding-right: 52px; }
 
   /* Need pins: hide text labels until zoomed (body class from JS) */
-  body.mobile-ui .fn-pin-label { display: none; }
-  body.mobile-ui.mobile-close-zoom .fn-pin-label { display: block; }
+  body.mobile-ui .fn-pin-label { display: none !important; }
+  body.mobile-ui.mobile-close-zoom .fn-pin-label { display: none; }
   body.mobile-ui .fn-pin-dot {
     width: 14px; height: 14px;
   }

@@ -638,7 +638,7 @@
     updateRankList();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.55 }, 1200);
     const tipEv = { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 };
-    if (!IS_MOBILE) showFloatingName(c.name, tipEv);
+    // names/info only via hover tooltip / mobile sheet
     showFnTooltip(c, tipEv);
     bumpIdle();
   }
@@ -946,9 +946,8 @@
     pinTooltip(ev);
   }
 
-  function showFloatingName(name, ev) {
-    let fl = document.getElementById('fn-float-label');
-    if (!fl) {
+  function
+if (!fl) {
       fl = document.createElement('div');
       fl.id = 'fn-float-label';
       fl.className = 'fn-float-label';
@@ -967,7 +966,7 @@
   function showReserveTooltip(r, ev) {
     tooltipEl.classList.remove('need-card');
     tooltipEl.classList.add('reserve-card');
-    if (!IS_MOBILE) showFloatingName(r.name, ev);
+    // names/info only via hover tooltip / mobile sheet
     const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
     const badge = ltdwa
       ? '<span class="badge ltdwa-link">On active water-need list</span>'
