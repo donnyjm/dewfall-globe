@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC LTDWA need layer. Model estimates only. Mekilok, North Vancouver." />
+  <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
   <title>DEWFALL · Where water falls from air</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -35,7 +35,7 @@
   <div class="ltdwa-banner" id="ltdwa-banner" role="status">
     <strong id="banner-title">First Nations reserves</strong>
     <span id="banner-stats">· loading…</span>
-    <span class="ltdwa-banner-note" id="banner-note">Silver = all IR · Amber/red = active LTDWA need · ISC Aug 2026</span>
+    <span class="ltdwa-banner-note" id="banner-note">Amber/red = long-term · Gold = short-term · ISC + FNHA BC</span>
   </div>
 
   <aside class="panel controls" aria-label="Map controls">
@@ -56,7 +56,7 @@
         <label class="toggle"><input type="checkbox" id="layer-dewpoint" /> Dew-point labels</label>
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-reserves" checked /> All First Nations reserves</label>
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-other-fn" /> Other FN settlement lands</label>
-        <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> Active LTDWA (need)</label>
+        <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> Water need (long + short)</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-northern" /> Northern remote highlight</label>
         <label class="toggle"><input type="checkbox" id="layer-rotate" checked /> Auto-rotate</label>
       </div>
@@ -66,19 +66,21 @@
       <div class="legend-labels"><span>Lower L/day</span><span>Higher water</span></div>
       <div class="legend-need">
         <span class="need-swatch dens-low"></span><span class="need-swatch dens-mid"></span><span class="need-swatch dens-high"></span> Reserves by cluster density
-        <span class="need-swatch bwa"></span> BWA need
-        <span class="need-swatch dnc"></span> Do not consume
+        <span class="need-swatch bwa"></span> Long-term (amber/red)
+        <span class="need-swatch short"></span> Short-term (gold)
+        <span class="need-swatch dnc"></span> Do not consume / use
         <span class="need-swatch north"></span> Northern remote
       </div>
+      <div class="legend-need legend-bc">BC DWAs from FNHA (Aug 2026) included in need layer</div>
     </div>
-    <p class="hint">Silver dots = NRCan Indian Reserves nationwide. Amber/red = ISC LTDWA need (on top). Cyan pillars = estimated L/day. Zoom in for individual reserve pins.</p>
+    <p class="hint">Silver = NRCan Indian Reserves nationwide. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Cyan pillars = estimated L/day. Not a northern-only story — includes BC, Prairies, Atlantic, southern ON.</p>
   </aside>
 
   <aside class="panel rank-panel" aria-label="Rankings">
     <header>
       <div class="rank-tabs" role="tablist">
         <button type="button" class="rank-tab active" data-rank="yield" role="tab">Yield</button>
-        <button type="button" class="rank-tab" data-rank="need" role="tab">LTDWA need</button>
+        <button type="button" class="rank-tab" data-rank="need" role="tab">Water need</button>
       </div>
       <h2 id="rank-title">Where DEWFALL produces most</h2>
       <p id="rank-sub">Ranked by modeled L/day · click to fly</p>
@@ -98,8 +100,8 @@
     <strong>DEWFALL Alpha</strong> — modular solar-ready residential AWG.
     R290 refrigeration core + regenerating sorbent; Tier 5 = six TEC cassettes on dedicated solar, AI-gated by dew point, temps, airflow, energy.
     <em>US Southwest</em> = drought demand · <em>coastal humid</em> = high yield.
-    <em>FN reserves</em> = NRCan Aboriginal Lands (IR). <em>LTDWA</em> = ISC unmet drinking-water need (often cold → lower model L/day).
-    <div class="attr">Data: NRCan ALC Legislative Boundaries · ISC LTDWA Aug 2026</div>
+    <em>FN reserves</em> = NRCan Aboriginal Lands (IR). <em>Water need</em> = ISC long-term + short-term DWAs + FNHA BC (often cold → lower model L/day).
+    <div class="attr">Data: NRCan ALC · ISC LTDWA Aug 2026 · ISC short-term Sep 2026 · FNHA DWA Aug 2026</div>
   </aside>
 
   <div id="tooltip" class="tooltip-card" role="dialog" aria-label="Site details"></div>

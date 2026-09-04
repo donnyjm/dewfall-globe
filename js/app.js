@@ -1,17 +1,78 @@
 /**
  * DEWFALL Globe — interactive photorealistic Earth visualization
  * Uses globe.gl (Three.js) + curated climate normals + transparent yield model
- * + NRCan First Nations reserves nationwide + ISC LTDWA need layer.
+ * + NRCan First Nations reserves nationwide + ISC/FNHA water-need layer
+ * (long-term LTDWA + short-term DWA + BC FNHA).
  */
 (function () {
   'use strict';
 
   const Y = window.DEWFALL_YIELD;
   const CITIES = window.DEWFALL_CITIES;
-  const FN = window.DEWFALL_FN_LTDWA || [];
+  const FN_LONG = window.DEWFALL_FN_LTDWA || [];
+  const FN_SHORT = window.DEWFALL_FN_SHORT || [];
+  const FN_BC = window.DEWFALL_FN_BC || [];
   const FN_META = window.DEWFALL_FN_LTDWA_META || {};
+  const FN_SHORT_META = window.DEWFALL_FN_SHORT_META || {};
+  const FN_BC_META = window.DEWFALL_FN_BC_META || {};
   const RESERVES = window.DEWFALL_FN_RESERVES || [];
   const RES_META = window.DEWFALL_FN_RESERVES_META || {};
+
+  /** Merge need lists: long-term wins if same community; else short / BC. */
+  function normNeedName(n) {
+    return String(n || '').toLowerCase()
+      .replace(/first nation.*$/i, '')
+      .replace(/nation.*$/i, '')
+      .replace(/band.*$/i, '')
+      .replace(/tribe.*$/i, '')
+      .replace(/[^a-z0-9]/g, '');
+  }
+  function findNeedKey(byKey, key) {
+    if (byKey[key] != null) return key;
+    const keys = Object.keys(byKey);
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (!k || !key) continue;
+      if (k.indexOf(key) === 0 || key.indexOf(k) === 0) {
+        if (Math.min(k.length, key.length) >= 8) return k;
+      }
+    }
+    return null;
+  }
+  function mergeNeedLists() {
+    const out = [];
+    const byKey = {};
+    function add(c, termDefault, priority) {
+      if (!c) return;
+      const e = Object.assign({}, c);
+      if (!e.term) e.term = termDefault;
+      e._needPriority = priority;
+      const key = normNeedName(e.name);
+      const hit = findNeedKey(byKey, key);
+      const prev = hit != null ? byKey[hit] : null;
+      if (prev != null) {
+        if (priority > out[prev]._needPriority) {
+          out[prev].systems = Array.from(new Set((out[prev].systems || []).concat(e.systems || [])));
+          return;
+        }
+        if (priority < out[prev]._needPriority) {
+          const keepSystems = Array.from(new Set((out[prev].systems || []).concat(e.systems || [])));
+          out[prev] = e;
+          out[prev].systems = keepSystems;
+        } else {
+          out[prev].systems = Array.from(new Set((out[prev].systems || []).concat(e.systems || [])));
+        }
+        return;
+      }
+      byKey[key] = out.length;
+      out.push(e);
+    }
+    FN_LONG.forEach((c) => add(Object.assign({}, c, { term: c.term || 'long' }), 'long', 0));
+    FN_SHORT.forEach((c) => add(c, 'short', 1));
+    FN_BC.forEach((c) => add(c, c.term || 'short', 1));
+    return out;
+  }
+  const FN = mergeNeedLists();
 
   const DEFAULT_RESERVE_TYPES = new Set(RES_META.defaultTypes || ['IR']);
   const OPTIONAL_RESERVE_TYPES = new Set(RES_META.optionalTypes || ['IL', 'SHL', 'CRN', 'SRN', 'YFN']);
@@ -79,9 +140,18 @@
   }
 
   function needSignal(c) {
-    const homes = (c.homes != null && c.homes > 0) ? c.homes : (c.buildings || 10);
+    let homes = (c.homes != null && c.homes > 0) ? c.homes : (c.buildings || 0);
+    if (!homes) {
+      const p = String(c.populationNote || '');
+      if (/1001|5000/.test(p)) homes = 400;
+      else if (/501|1000/.test(p)) homes = 150;
+      else if (/101|500/.test(p)) homes = 80;
+      else if (/51|100|26|50|1-25|0-100/.test(p)) homes = 30;
+      else homes = c.term === 'short' ? 25 : 10;
+    }
     const w = REMOTE_WEIGHT[c.remoteness] || 1;
-    return homes * w;
+    const termBoost = c.term === 'long' ? 1.15 : 1;
+    return homes * w * termBoost;
   }
 
   function visibleReserves() {
@@ -100,7 +170,9 @@
     const matched = all.filter((r) => r.hasLtdwa).length;
     let s = ir + ' Indian Reserves';
     if (other > 0) s += ' + ' + other + ' other FN lands';
-    s += ' · ' + (FN.length || 38) + ' with active LTDWA (ISC Aug 2026)';
+    const longN = FN.filter((c) => c.term === 'long').length;
+    const shortN = FN.filter((c) => c.term === 'short').length;
+    s += ' · ' + FN.length + ' water-need (' + longN + ' long · ' + shortN + ' short; ISC+FNHA)';
     if (matched) s += ' · ' + matched + ' name-matched';
     return s;
   }
@@ -174,21 +246,25 @@
     el.classList.toggle('dim', !showRes && !showNeed);
     if (state.layers.northern) el.classList.add('northern-on');
     else el.classList.remove('northern-on');
+    const longN = FN.filter((c) => c.term === 'long').length;
+    const shortN = FN.filter((c) => c.term === 'short').length;
+    const bcN = FN.filter((c) => c.province === 'BC' || c.fnha).length;
     if (title) {
-      if (showRes && showNeed) title.textContent = 'First Nations reserves + LTDWA need';
+      if (showRes && showNeed) title.textContent = 'First Nations reserves + water need';
       else if (showRes) title.textContent = 'First Nations reserves (NRCan)';
-      else if (showNeed) title.textContent = 'First Nations LTDWA need';
+      else if (showNeed) title.textContent = 'First Nations water-need (ISC + FNHA)';
       else title.textContent = 'First Nations layers off';
     }
     if (stats) {
       if (showRes) stats.textContent = '· ' + reserveCountLabel();
-      else if (showNeed) stats.textContent = '· ' + (FN.length || 38) + ' communities · ISC Aug 2026';
-      else stats.textContent = '';
+      else if (showNeed) {
+        stats.textContent = '· ' + longN + ' long-term · ' + shortN + ' short-term · includes BC/Prairies/Atlantic/southern ON';
+      } else stats.textContent = '';
     }
     if (note) {
-      note.textContent = showRes
-        ? 'Silver = all IR (NRCan ALC) · Amber/red = active LTDWA need · need ≠ high yield'
-        : 'Need sites ≠ high yield · northern cold → lower L/day';
+      note.textContent = showNeed
+        ? ('Amber/red = long-term · Gold = short-term · BC via FNHA (' + bcN + ') · need ≠ high yield')
+        : 'Silver = all IR (NRCan ALC) · need layer off';
     }
   }
 
@@ -198,6 +274,12 @@
       const e = Y.enrichCity(c, state.season);
       e.needSignal = needSignal(c);
       e.kind = 'fn';
+      e.term = c.term || 'long';
+      e.dateSet = c.dateSet;
+      e.populationNote = c.populationNote;
+      e.advisoryTypeRaw = c.advisoryTypeRaw;
+      e.fnha = c.fnha;
+      e.source = c.source;
       return e;
     });
     updateStats();
@@ -233,7 +315,15 @@
   }
 
   function advisoryLabel(t) {
-    return t === 'DNC' ? 'Do not consume' : 'Boil water advisory';
+    if (t === 'DNC') return 'Do not consume';
+    if (t === 'DNU') return 'Do not use';
+    if (t === 'WQA') return 'Water quality advisory';
+    return 'Boil water advisory';
+  }
+
+  function termLabel(c) {
+    if (c.term === 'short') return 'Short-term';
+    return 'Long-term';
   }
 
   function shortName(name) {
@@ -253,8 +343,8 @@
     const sub = $('#rank-sub');
 
     if (state.rankMode === 'need') {
-      if (title) title.textContent = 'LTDWA need vs modeled yield';
-      if (sub) sub.textContent = 'Ranked by homes \u00d7 remoteness \u00b7 yield shown for tension';
+      if (title) title.textContent = 'Water need vs modeled yield';
+      if (sub) sub.textContent = 'Long + short-term (ISC/FNHA) \u00b7 ranked by need signal';
       let rows = enrichedFn.slice();
       if (state.layers.northern) {
         rows = rows.filter((c) => c.remoteness === 'remote-northern' || c.highlightNorthern);
@@ -262,13 +352,14 @@
       rows.sort((a, b) => b.needSignal - a.needSignal);
       list.innerHTML = rows.map((c, i) => {
         const y = c.yield;
-        const homes = c.homes != null ? c.homes + ' homes' : (c.buildings ? c.buildings + ' bldgs' : 'multi-system');
+        const homes = c.homes != null ? c.homes + ' homes' : (c.buildings ? c.buildings + ' bldgs' : (c.populationNote || 'multi-system'));
         const north = (c.remoteness === 'remote-northern' || c.highlightNorthern) ? ' north' : '';
-        const dnc = c.advisoryType === 'DNC' ? ' dnc' : '';
-        return '<div class="rank-item need-item' + north + dnc + (state.selectedId === c.id ? ' active' : '') + '" data-id="' + c.id + '" data-kind="fn">' +
+        const dnc = (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') ? ' dnc' : '';
+        const shortCls = c.term === 'short' ? ' short-term' : '';
+        return '<div class="rank-item need-item' + north + dnc + shortCls + (state.selectedId === c.id ? ' active' : '') + '" data-id="' + c.id + '" data-kind="fn">' +
           '<div class="num">' + (i + 1) + '</div>' +
           '<div><div class="city-name">' + escapeHtml(c.name) + '</div>' +
-          '<div class="city-meta">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(advisoryLabel(c.advisoryType)) +
+          '<div class="city-meta">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(termLabel(c)) + ' \u00b7 ' + escapeHtml(advisoryLabel(c.advisoryTypeRaw || c.advisoryType)) +
           ' \u00b7 ' + escapeHtml(homes) + ' \u00b7 ' + escapeHtml(c.remoteness) + '</div></div>' +
           '<div class="yld need-yld">' +
             '<span class="need-score">' + Math.round(c.needSignal) + '</span>' +
@@ -315,7 +406,9 @@
     state.selectedKind = 'fn';
     updateRankList();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.55 }, 1200);
-    showFnTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
+    const tipEv = { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 };
+    showFloatingName(c.name, tipEv);
+    showFnTooltip(c, tipEv);
     bumpIdle();
   }
 
@@ -324,7 +417,7 @@
     if (!r || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'reserve';
-    globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 1.45 }, 1100);
+    globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 0.55 }, 1400);
     if (r.hasLtdwa && r.ltdwaId && fnById[r.ltdwaId]) {
       const c = enrichedFn.find((x) => x.id === r.ltdwaId) || Y.enrichCity(fnById[r.ltdwaId], state.season);
       if (c && !c.needSignal) c.needSignal = needSignal(fnById[r.ltdwaId]);
@@ -417,13 +510,13 @@
           if (d.kind === 'reserve') return reserveDensityColor(d);
           return Y.yieldColor(d.yield.yieldMid, maxY);
         })
-        .pointsMerge(useReservePts)
+        .pointsMerge(false)
         .pointLabel(() => '')
         .onPointHover(onPointHover)
         .onPointClick((d) => {
           if (!d) return;
-          if (d.kind === 'reserve') focusReserve(d.id);
-          else focusCity(d.id);
+          if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
+          else if (d.kind === 'city' || d._city) focusCity(d.id || (d._city && d._city.id));
         });
     } else {
       globe.pointsData([]);
@@ -454,18 +547,19 @@
     if (state.layers.ltdwa) {
       visibleFn().forEach((c) => {
         const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
-        if (isNorth || state.layers.northern) {
-          mist.push({
-            lat: c.lat,
-            lng: c.lng,
-            maxR: isNorth ? 3.2 : 2.0,
-            propagationSpeed: 0.55,
-            repeatPeriod: isNorth ? 900 : 1400,
-            color: function () {
-              return isNorth ? 'rgba(255, 90, 50, 0.45)' : 'rgba(255, 160, 40, 0.28)';
-            },
-          });
-        }
+        const isSouth = c.remoteness === 'southern' || c.remoteness === 'road-access';
+        mist.push({
+          lat: c.lat,
+          lng: c.lng,
+          maxR: isNorth ? 2.8 : (isSouth ? 2.4 : 2.2),
+          propagationSpeed: 0.55,
+          repeatPeriod: isNorth ? 900 : 1200,
+          color: function () {
+            if (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') return 'rgba(224, 72, 56, 0.42)';
+            if (c.term === 'short') return 'rgba(255, 200, 64, 0.38)';
+            return isNorth ? 'rgba(255, 90, 50, 0.42)' : 'rgba(255, 160, 40, 0.4)';
+          },
+        });
       });
     }
     globe.ringsData(mist)
@@ -517,9 +611,10 @@
 
   function makeFnPin(c) {
     const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
-    const isDnc = c.advisoryType === 'DNC';
+    const isDnc = c.advisoryType === 'DNC' || c.advisoryType === 'DNU';
+    const isShort = c.term === 'short';
     const el = document.createElement('div');
-    el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isDnc ? ' dnc' : ' bwa') +
+    el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (state.layers.northern && isNorth ? ' emphasis' : '');
     el.title = c.name;
     el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label">' +
@@ -586,17 +681,36 @@
     tooltipEl.classList.add('visible');
   }
 
+  function showFloatingName(name, ev) {
+    let fl = document.getElementById('fn-float-label');
+    if (!fl) {
+      fl = document.createElement('div');
+      fl.id = 'fn-float-label';
+      fl.className = 'fn-float-label';
+      document.body.appendChild(fl);
+    }
+    fl.textContent = name || '';
+    fl.classList.add('visible');
+    const x = Math.min(window.innerWidth - 220, Math.max(12, (ev && ev.clientX || window.innerWidth / 2) + 14));
+    const y = Math.max(12, (ev && ev.clientY || window.innerHeight / 2) - 36);
+    fl.style.left = x + 'px';
+    fl.style.top = y + 'px';
+    clearTimeout(showFloatingName._t);
+    showFloatingName._t = setTimeout(function () { fl.classList.remove('visible'); }, 4500);
+  }
+
   function showReserveTooltip(r, ev) {
     tooltipEl.classList.remove('need-card');
     tooltipEl.classList.add('reserve-card');
+    showFloatingName(r.name, ev);
     const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
     const badge = ltdwa
-      ? '<span class="badge ltdwa-link">On active LTDWA list</span>'
-      : '<span class="badge reserve-badge">No active LTDWA on ISC list</span>';
+      ? '<span class="badge ltdwa-link">On active water-need list</span>'
+      : '<span class="badge reserve-badge">No active advisory on current need list</span>';
     tooltipEl.innerHTML =
       '<div class="tc-head reserve-head">' +
         '<div class="reserve-kicker">First Nations land \u00b7 NRCan ALC</div>' +
-        '<h3>' + escapeHtml(r.name) + '</h3>' +
+        '<h3 style="font-size:1.35rem;line-height:1.25;margin:6px 0 8px;color:#fff;font-weight:700;">' + escapeHtml(r.name) + '</h3>' +
         (r.alt ? '<div class="sub">' + escapeHtml(r.alt) + '</div>' : '') +
         '<div class="sub">' + escapeHtml(r.province || '') + ' \u00b7 ' + escapeHtml(r.typeLabel || r.type || 'IR') + '</div>' +
         badge +
@@ -614,13 +728,16 @@
 
   function showFnTooltip(c, ev, reserveCtx) {
     const y = c.yield;
-    const homes = c.homes != null ? String(c.homes) : (c.homesImpactNote || 'see systems');
-    const since = c.longTermSince || 'long-standing / see ISC';
+    const homes = c.homes != null ? String(c.homes) : (c.populationNote || c.homesImpactNote || 'see systems');
+    const since = c.longTermSince || c.dateSet || 'see source';
     const systems = (c.systems || []).map(escapeHtml).join('<br/>');
     const alt = c.altNames ? '<div class="sub">' + escapeHtml(c.altNames) + '</div>' : '';
-    const badge = c.advisoryType === 'DNC' ? 'dnc' : 'bwa';
+    const badge = (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') ? 'dnc' : (c.term === 'short' ? 'short-badge' : 'bwa');
     const northTag = (c.remoteness === 'remote-northern' || c.highlightNorthern)
       ? '<span class="badge north-badge">Northern remote</span>' : '';
+    const termTag = '<span class="badge ' + (c.term === 'short' ? 'short-badge' : 'long-badge') + '">' +
+      escapeHtml(termLabel(c)) + '</span>';
+    const bcTag = (c.province === 'BC' || c.fnha) ? '<span class="badge bc-badge">BC FNHA</span>' : '';
     const resLine = reserveCtx
       ? '<div class="sub">Reserve match: ' + escapeHtml(reserveCtx.name) + ' (' + escapeHtml(reserveCtx.type || 'IR') + ')</div>'
       : '';
@@ -630,16 +747,17 @@
     tooltipEl.innerHTML =
       '<div class="tc-head need-head">' +
         '<div class="need-kicker">NEED \u00b7 water access \u2014 not a high-yield site</div>' +
-        '<h3>' + escapeHtml(c.name) + '</h3>' +
+        '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
         alt +
         resLine +
         '<div class="sub">' + escapeHtml(c.province) + ' \u00b7 ' + escapeHtml(c.remoteness) + '</div>' +
-        '<span class="badge ' + badge + '">' + escapeHtml(advisoryLabel(c.advisoryType)) + '</span> ' +
-        northTag +
+        termTag + ' ' +
+        '<span class="badge ' + badge + '">' + escapeHtml(advisoryLabel(c.advisoryTypeRaw || c.advisoryType)) + '</span> ' +
+        northTag + ' ' + bcTag +
       '</div>' +
       '<div class="tc-grid">' +
-        '<div class="tc-cell"><div class="k">Homes impacted</div><div class="v">' + escapeHtml(homes) + '</div></div>' +
-        '<div class="tc-cell"><div class="k">Long-term since</div><div class="v">' + escapeHtml(since) + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Population / homes</div><div class="v">' + escapeHtml(homes) + '</div></div>' +
+        '<div class="tc-cell"><div class="k">' + (c.term === 'short' ? 'Date set' : 'Long-term since') + '</div><div class="v">' + escapeHtml(since) + '</div></div>' +
         '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under local climate</div><div class="v big need-yield">' +
           y.yieldLo + ' \u2013 ' + y.yieldHi + ' L/day <span class="model-only">(model)</span></div></div>' +
         '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' \u00b0C \u00b7 ' + y.RH + '%</div></div>' +
@@ -655,9 +773,9 @@
           '<span>Need signal: <strong>' + Math.round(c.needSignal) + '</strong></span>' +
         '</div>' +
         '<div class="est-tag">' +
-          'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC LTDWA') + '. ' +
-          'List changes. Federal public-system LTDWAs only \u2014 not all private wells, short-term advisories, or territorial systems. ' +
-          'Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin.' +
+          'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC / FNHA') + '. ' +
+          'List changes. Includes ISC long-term + short-term (south of 60 excl. BC) and FNHA BC advisories. ' +
+          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin.' +
         '</div>' +
       '</div>';
     positionTooltip(ev);
@@ -781,7 +899,8 @@
       showBootError("EARTH FAILED TO LOAD");
       return;
     }
-    if (!FN.length) console.warn("DEWFALL: FN LTDWA data not loaded");
+    if (!FN.length) console.warn("DEWFALL: FN water-need data not loaded");
+    else console.info("DEWFALL need layer:", FN.length, "communities (" + FN.filter(function (c) { return c.term === "long"; }).length + " long · " + FN.filter(function (c) { return c.term === "short"; }).length + " short)");
     if (!RESERVES.length) console.warn("DEWFALL: FN reserves data not loaded");
     else console.info("[DEWFALL] reserves loaded:", RESERVES.length, RES_META.dedupedCountsByType || {});
     try {

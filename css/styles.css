@@ -639,16 +639,21 @@ html, body {
   50% { box-shadow: 0 0 18px rgba(255,90,50,0.95); }
 }
 .fn-pin-label {
-  font: 600 9px/1.1 sans-serif;
-  color: #ffe0b8;
-  background: rgba(30,14,6,0.82);
-  border: 1px solid rgba(255,160,64,0.35);
-  padding: 2px 5px;
+  font: 700 10px/1.15 sans-serif;
+  color: #fff6e8;
+  background: rgba(30,14,6,0.9);
+  border: 1px solid rgba(255,160,64,0.55);
+  padding: 3px 6px;
   border-radius: 4px;
   white-space: nowrap;
-  max-width: 110px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.fn-pin.short .fn-pin-dot { background: #ffc840; }
+.fn-pin.short .fn-pin-label {
+  border-color: rgba(255,200,64,0.65);
+  color: #fff8d8;
 }
 .fn-pin.northern .fn-pin-label {
   border-color: rgba(255,90,50,0.55);
@@ -738,3 +743,38 @@ html, body {
 .need-swatch.dens-low { background: #5ec8ff; box-shadow: none; }
 .need-swatch.dens-mid { background: #ffe66d; box-shadow: none; }
 .need-swatch.dens-high { background: #ff6b35; box-shadow: none; }
+
+
+/* Short-term / BC need + floating reserve name */
+.need-swatch.short { background: #ffc840; box-shadow: 0 0 6px rgba(255,200,64,0.55); }
+.legend-bc { margin-top: 4px; font-size: 10px; color: var(--muted); opacity: 0.9; }
+.badge.short-badge { background: rgba(255,200,64,0.25); color: #ffd878; border: 1px solid rgba(255,200,64,0.45); }
+.badge.long-badge { background: rgba(240,160,64,0.22); color: #ffb060; border: 1px solid rgba(240,160,64,0.4); }
+.badge.bc-badge { background: rgba(100,180,255,0.2); color: #9cf; border: 1px solid rgba(100,180,255,0.35); }
+.rank-item.need-item.short-term .need-score { color: #ffc840; }
+.fn-float-label {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(8, 16, 28, 0.92);
+  border: 1px solid rgba(255, 200, 120, 0.45);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  max-width: min(280px, 70vw);
+}
+.fn-float-label.visible { opacity: 1; transform: translateY(0); }
+.tooltip-card.reserve-card h3,
+.tooltip-card.need-card h3 {
+  font-size: 1.3rem !important;
+  line-height: 1.25 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+}

@@ -29,7 +29,7 @@ A static server is required so CDN libraries and modules load correctly (avoid `
 - Dark coastal/tech UI, DEWFALL branding, fullscreen responsive
 - Auto-rotate when idle; orbit / zoom / drag
 - **All First Nations reserves** nationwide (NRCan Aboriginal Lands — Indian Reserves), silver hexbin/dots
-- ISC First Nations **LTDWA need** layer (amber/red pins on top, distinct from cyan yield pillars)
+- First Nations **water-need** layer nationwide: ISC long-term LTDWA (amber/red) + ISC short-term (gold) + **FNHA BC** DWAs — not northern-only
 
 
 
@@ -41,20 +41,37 @@ Toggle **All First Nations reserves** (default ON) to show NRCan **Aboriginal La
 - Data file: `data/fn-reserves.js` (~2,200+ deduped IR pins + optional FN settlement types).
 - Optional **Other FN settlement lands**: Sechelt (SHL), Cree/Naskapi (CRN), Salt River (SRN), Yukon FN (YFN), Indian Land (IL). Excludes Inuit Owned Land (IOL) and similar by default.
 - At world/continent zoom: hexbin aggregation for GPU performance; zoom in for individual silver pins.
-- Amber/red LTDWA need pins stay larger and on top. Fuzzy name + geo match marks `hasLtdwa` where possible.
-- Attribution: **NRCan ALC Legislative Boundaries** + **ISC LTDWA**.
+- Water-need pins stay larger and on top (long-term amber/red · short-term gold). Fuzzy name + geo match marks `hasLtdwa` where possible.
+- Attribution: **NRCan ALC Legislative Boundaries** + **ISC LTDWA** + **ISC short-term DWA** + **FNHA BC DWA**.
 
-## First Nations LTDWA need layer
+## First Nations water-need layer (nationwide)
 
-Toggle **First Nations — active LTDWA (need)** to show ISC long-term drinking water advisory communities (38 communities / 40 advisories as of **2026-08-13**).
+Toggle **Water need (long + short)** to show drinking-water advisory communities across Canada — **not a northern-only story**.
 
-- These pins are **NEED / water-access** sites — **not** high AWG yield markets.
-- Amber = boil-water advisory (BWA); red = do-not-consume (DNC); northern remote pins are emphasized (optional **Northern remote** filter).
-- Cards show homes impacted, since date, systems, **modeled** DEWFALL L/day under local climate (often low in cold/northern bins), plus ISC attribution.
-- Rank tab **LTDWA need** sorts by homes × remoteness and still shows yield so the need-vs-production tension is visible.
-- Source: Indigenous Services Canada federal public-system LTDWAs only. List changes; private wells / short-term / territorial systems often not included. BC/AB/QC/Atlantic currently 0 on this list.
+Merged need list (~97 communities after dedupe; long-term wins if both):
 
-Data: `data/fn-ltdwa.js` (`window.DEWFALL_FN_LTDWA`).
+| Source | As of | Scope |
+|--------|-------|--------|
+| ISC **LTDWA** (long-term) | 2026-08-13 | 38 communities / 40 advisories (mostly ON/MB/SK; includes southern ON e.g. Oneida, Chippewas of the Thames) |
+| ISC **short-term** DWA | 2026-09-03 | ~35 active communities south of 60 excl. BC (Atlantic, QC, ON, MB, SK, AB) — revoked rows excluded |
+| **FNHA** BC monthly summary | 2026-08-31 | ~26 community pins from 38 DWAs / 32 communities in BC |
+
+- Pins are **NEED / water-access** sites — **not** high AWG yield markets.
+- **Long-term** = amber/red (BWA / DNC/DNU); **Short-term** = gold; northern remote optional highlight.
+- Southern examples on short-term: Six Nations, Moravian of the Thames, Dokis, Tobique, Metepenagiag, Cold Lake, etc.
+- Cards show term (long vs short), name large/clear, systems, date set, **modeled** DEWFALL L/day, source attribution.
+- Rank tab **Water need** includes long + short; sorts by need signal (homes × remoteness × term).
+- Lists change; private wells / territorial systems may still have advisories not shown.
+
+Data files:
+- `data/fn-ltdwa.js` — `window.DEWFALL_FN_LTDWA`
+- `data/fn-short-term.js` — `window.DEWFALL_FN_SHORT`
+- `data/fn-bc-dwa.js` — `window.DEWFALL_FN_BC`
+
+Sources:
+- https://www.sac-isc.gc.ca/eng/1562856509704/1562856530304 (ISC short-term)
+- ISC LTDWA public list (long-term)
+- https://fnha.ca/wp-content/uploads/Drinking-Water-Advisory-Monthly-Summary.pdf (FNHA Aug 2026)
 
 ## Data sources
 
@@ -84,6 +101,10 @@ Calibrated (illustrative, not bench-fitted) toward:
 | `index.html` | App shell |
 | `css/styles.css` | Dark product UI |
 | `data/cities.js` | City climate normals |
+| `data/fn-ltdwa.js` | ISC long-term LTDWA need sites |
+| `data/fn-short-term.js` | ISC short-term DWA need sites |
+| `data/fn-bc-dwa.js` | FNHA BC drinking-water advisories |
+| `data/fn-reserves.js` | NRCan IR / FN land centroids |
 | `js/yield.js` | Psychrometric yield model |
 | `js/app.js` | Globe, layers, UI |
 | `js/loader.js` | Loads Three.js + globe.gl (CDN) then local scripts |
