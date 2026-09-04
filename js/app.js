@@ -329,10 +329,10 @@
     if (!globe) return;
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
     const reserves = visibleReserves();
-    const useHex = state.layers.reserves && !state.closeZoom && reserves.length > 0;
-    const useReservePts = state.layers.reserves && state.closeZoom && reserves.length > 0;
+    // Always draw crisp individual reserve markers (no blurry hexbins).
+    const useReservePts = state.layers.reserves && reserves.length > 0;
 
-    // Yield pillars (+ individual reserve dots when zoomed in)
+    // Yield pillars + sharp reserve pins at every zoom
     const pts = [];
     if (state.layers.yield && enriched.length) {
       enriched.forEach((c) => {
@@ -370,25 +370,27 @@
     }
 
     if (pts.length) {
+      const reserveR = state.altitude > 2.2 ? 0.22 : (state.altitude > 1.5 ? 0.28 : 0.34);
       globe
         .pointsData(pts)
         .pointLat('lat')
         .pointLng('lng')
         .pointAltitude((d) => {
-          if (d.kind === 'reserve') return 0.004;
+          if (d.kind === 'reserve') return 0.012;
           return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
         })
         .pointRadius((d) => {
-          if (d.kind === 'reserve') return 0.11;
+          if (d.kind === 'reserve') return reserveR;
           return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
         })
         .pointColor((d) => {
           if (d.kind === 'reserve') {
-            return d.hasLtdwa ? 'rgba(255, 180, 100, 0.55)' : 'rgba(220, 230, 240, 0.55)';
+            // Opaque high-contrast markers (no soft translucent mush)
+            return d.hasLtdwa ? '#ffb347' : '#f4fbff';
           }
           return Y.yieldColor(d.yield.yieldMid, maxY);
         })
-        .pointsMerge(useReservePts && !state.layers.yield && pts.length > 500)
+        .pointsMerge(useReservePts)
         .pointLabel(() => '')
         .onPointHover(onPointHover)
         .onPointClick((d) => {
@@ -400,32 +402,8 @@
       globe.pointsData([]);
     }
 
-    // Hexbin for reserves at world / continent view (GPU-friendly)
-    if (useHex) {
-      const hexRes = state.altitude > 2.4 ? 3 : 4;
-      globe
-        .hexBinPointsData(reserves)
-        .hexBinPointLat('lat')
-        .hexBinPointLng('lng')
-        .hexBinPointWeight(() => 1)
-        .hexBinResolution(hexRes)
-        .hexTopColor((d) => {
-          const n = d.sumWeight || 1;
-          const a = Math.min(0.55, 0.18 + n * 0.04);
-          return 'rgba(210, 220, 230, ' + a + ')';
-        })
-        .hexSideColor(() => 'rgba(160, 175, 190, 0.12)')
-        .hexAltitude((d) => 0.002 + Math.min(0.035, (d.sumWeight || 1) * 0.0025))
-        .hexLabel((d) => (d.sumWeight || 0) + ' reserves')
-        .onHexClick((d) => {
-          if (!d || !d.points || !d.points.length) return;
-          // Fly toward densest / first point in bin
-          const p = d.points[0];
-          if (p && p.id) focusReserve(p.id);
-        });
-    } else {
-      globe.hexBinPointsData([]);
-    }
+    // Hexbins removed — they read as blurry dots at country scale.
+    globe.hexBinPointsData([]);
 
     // Humidity rings + northern LTDWA pulses
     const mist = [];
@@ -691,13 +669,12 @@
     const pov = globe.pointOfView();
     const alt = pov && pov.altitude != null ? pov.altitude : state.altitude;
     state.altitude = alt;
-    const close = alt < 1.85;
-    // Hex resolution band: only rebuild when crossing coarse/fine threshold
-    const hexBand = alt > 2.4 ? 3 : 4;
-    if (close !== state.closeZoom || (!close && state._hexBand !== hexBand)) {
-      state.closeZoom = close;
-      state._hexBand = hexBand;
-      applyLayers();
+    state.closeZoom = alt < 1.85;
+    // Rebuild when crossing pin-size bands so markers stay crisp and readable
+    const sizeBand = alt > 2.2 ? 0 : (alt > 1.5 ? 1 : 2);
+    if (sizeBand !== state._sizeBand) {
+      state._sizeBand = sizeBand;
+      if (state.layers.reserves) applyLayers();
     }
   }
 
