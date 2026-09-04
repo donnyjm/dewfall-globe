@@ -52,6 +52,32 @@
 
   const $ = (s) => document.querySelector(s);
 
+  function reserveDensityColor(d) {
+    // Local cluster density = neighbors within ~75 km (not census population).
+    const n = (d && d.density != null) ? d.density : ((d && d._res && d._res.density) || 0);
+    const t = Math.max(0, Math.min(1, n / 80));
+    const stops = [
+      [0.00, [94, 200, 255]],
+      [0.35, [126, 231, 180]],
+      [0.65, [255, 230, 109]],
+      [1.00, [255, 107, 53]],
+    ];
+    let a = stops[0][1], b = stops[stops.length - 1][1], u = t;
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i][0] && t <= stops[i + 1][0]) {
+        const span = stops[i + 1][0] - stops[i][0] || 1;
+        u = (t - stops[i][0]) / span;
+        a = stops[i][1];
+        b = stops[i + 1][1];
+        break;
+      }
+    }
+    const rr = Math.round(a[0] + (b[0] - a[0]) * u);
+    const gg = Math.round(a[1] + (b[1] - a[1]) * u);
+    const bb = Math.round(a[2] + (b[2] - a[2]) * u);
+    return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
+  }
+
   function needSignal(c) {
     const homes = (c.homes != null && c.homes > 0) ? c.homes : (c.buildings || 10);
     const w = REMOTE_WEIGHT[c.remoteness] || 1;
@@ -364,30 +390,31 @@
           province: r.province,
           hasLtdwa: !!r.hasLtdwa,
           ltdwaId: r.ltdwaId,
+          density: r.density || 0,
           _res: r,
         });
       });
     }
 
     if (pts.length) {
-      const reserveR = state.altitude > 2.2 ? 0.22 : (state.altitude > 1.5 ? 0.28 : 0.34);
+      const reserveR = state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07);
       globe
         .pointsData(pts)
         .pointLat('lat')
         .pointLng('lng')
         .pointAltitude((d) => {
-          if (d.kind === 'reserve') return 0.012;
+          if (d.kind === 'reserve') return 0.0025;
           return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
         })
         .pointRadius((d) => {
-          if (d.kind === 'reserve') return reserveR;
+          if (d.kind === 'reserve') {
+            const dens = (d.density != null ? d.density : (d._res && d._res.density)) || 0;
+            return reserveR * (1 + Math.min(0.35, dens / 140));
+          }
           return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
         })
         .pointColor((d) => {
-          if (d.kind === 'reserve') {
-            // Opaque high-contrast markers (no soft translucent mush)
-            return d.hasLtdwa ? '#ffb347' : '#f4fbff';
-          }
+          if (d.kind === 'reserve') return reserveDensityColor(d);
           return Y.yieldColor(d.yield.yieldMid, maxY);
         })
         .pointsMerge(useReservePts)
@@ -578,6 +605,7 @@
         (ltdwa
           ? '<div class="why">Matched to ISC LTDWA community: <strong>' + escapeHtml(ltdwa.name) + '</strong>. Click the amber need pin for advisory details.</div>'
           : '<div class="why">Indian Reserve / FN land centroid. Not on the current ISC federal public-system LTDWA list (list changes; private wells &amp; territorial systems may still have advisories).</div>') +
+        '<div class="fit">Nearby reserve density: <strong>' + (r.density != null ? r.density : '—') + '</strong> other reserves within 75 km (cluster proxy — not census population).</div>' +
         '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA.</div>' +
       '</div>';
     positionTooltip(ev);

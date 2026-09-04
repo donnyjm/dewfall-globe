@@ -734,3 +734,7 @@ html, body {
   color: #ffb060;
   border-color: rgba(255,160,64,0.4);
 }
+
+.need-swatch.dens-low { background: #5ec8ff; box-shadow: none; }
+.need-swatch.dens-mid { background: #ffe66d; box-shadow: none; }
+.need-swatch.dens-high { background: #ff6b35; box-shadow: none; }
