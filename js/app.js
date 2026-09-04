@@ -612,6 +612,7 @@
 
     list.querySelectorAll('.rank-item').forEach((el) => {
       el.addEventListener('click', () => {
+        if (IS_MOBILE) closeSheets();
         if (el.dataset.kind === 'fn') focusFn(el.dataset.id);
         else focusCity(el.dataset.id);
       });
@@ -637,7 +638,7 @@
     updateRankList();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.55 }, 1200);
     const tipEv = { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 };
-    showFloatingName(c.name, tipEv);
+    if (!IS_MOBILE) showFloatingName(c.name, tipEv);
     showFnTooltip(c, tipEv);
     bumpIdle();
   }
@@ -727,7 +728,7 @@
         ? (state.altitude > 1.1 ? 0.04 : 0.055)
         : (state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07));
       // Mobile: merge reserve-heavy point clouds for WebGL cost; desktop stays unmerged for crisp clicks.
-      const mergePts = IS_MOBILE && useReservePts && showReservesNow;
+      const mergePts = IS_MOBILE && useReservePts && showReservesNow && state.altitude >= 1.05;
       globe
         .pointsData(pts)
         .pointLat('lat')
@@ -759,7 +760,7 @@
         })
         .pointsMerge(mergePts)
         .pointLabel(() => '')
-        .onPointHover(IS_MOBILE ? null : onPointHover)
+        .onPointHover(IS_MOBILE ? function () {} : onPointHover)
         .onPointClick((d) => {
           if (!d) return;
           if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
@@ -913,6 +914,7 @@
     el.innerHTML = html;
   }
 
+
   function showCityTooltip(c, ev) {
     const y = c.yield;
     const badgeClass = 's' + y.score;
@@ -941,8 +943,7 @@
         '</div>' +
         '<div class="est-tag">MODEL ESTIMATE \u2014 not measured. Machine incomplete. Climate normals \u00b7 ' + escapeHtml(state.season) + ' season bin. Irradiance model \u2014 not a utility interconnection study.</div>' +
       '</div>');
-    positionTooltip(ev);
-    tooltipEl.classList.add('visible');
+    pinTooltip(ev);
   }
 
   function showFloatingName(name, ev) {
@@ -966,7 +967,7 @@
   function showReserveTooltip(r, ev) {
     tooltipEl.classList.remove('need-card');
     tooltipEl.classList.add('reserve-card');
-    showFloatingName(r.name, ev);
+    if (!IS_MOBILE) showFloatingName(r.name, ev);
     const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
     const badge = ltdwa
       ? '<span class="badge ltdwa-link">On active water-need list</span>'
@@ -987,8 +988,7 @@
         '<div class="fit">Nearby reserve density: <strong>' + (r.density != null ? r.density : '—') + '</strong> other reserves within 75 km (cluster proxy — not census population).</div>' +
         '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA. Solar: offline GHI model \u2014 not a utility interconnection study.</div>' +
       '</div>');
-    positionTooltip(ev);
-    tooltipEl.classList.add('visible');
+    pinTooltip(ev);
   }
 
   function showFnTooltip(c, ev, reserveCtx) {
@@ -1044,11 +1044,17 @@
           'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin. Solar irradiance model \u2014 not a utility interconnection study.' +
         '</div>' +
       '</div>');
-    positionTooltip(ev);
-    tooltipEl.classList.add('visible');
+    pinTooltip(ev);
   }
 
   function positionTooltip(ev) {
+    if (!tooltipEl) return;
+    if (IS_MOBILE) {
+      // Bottom sheet — CSS owns left/right/bottom; clear desktop coords
+      tooltipEl.style.left = '';
+      tooltipEl.style.top = '';
+      return;
+    }
     if (!ev) return;
     const pad = 16;
     const w = 340;
@@ -1063,14 +1069,47 @@
     tooltipEl.style.top = y + 'px';
   }
 
+  function pinTooltip(ev) {
+    positionTooltip(ev);
+    tooltipEl.classList.add('visible');
+    state.tooltipPinned = !!IS_MOBILE;
+    if (IS_MOBILE) {
+      closeSheets();
+      const backdrop = $('#sheet-backdrop');
+      if (backdrop) {
+        backdrop.hidden = false;
+        backdrop.classList.add('show');
+        backdrop.setAttribute('aria-hidden', 'false');
+      }
+    }
+  }
+
   function hideTooltip() {
+    if (!tooltipEl) return;
     tooltipEl.classList.remove('visible');
+    state.tooltipPinned = false;
+    if (IS_MOBILE && !state.openSheet) {
+      const backdrop = $('#sheet-backdrop');
+      if (backdrop) {
+        backdrop.classList.remove('show');
+        backdrop.hidden = true;
+        backdrop.setAttribute('aria-hidden', 'true');
+      }
+    }
   }
 
   function bumpIdle() {
     if (!globe) return;
     globe.controls().autoRotate = false;
     clearTimeout(state.idleTimer);
+    if (IS_MOBILE) {
+      // After first interaction, stop auto-rotate until user toggles it back on
+      state.mobileTouched = true;
+      state.autoRotate = false;
+      const rot = $('#layer-rotate');
+      if (rot) rot.checked = false;
+      return;
+    }
     state.idleTimer = setTimeout(() => {
       if (state.autoRotate && globe) globe.controls().autoRotate = true;
     }, 8000);
@@ -1081,12 +1120,19 @@
     const pov = globe.pointOfView();
     const alt = pov && pov.altitude != null ? pov.altitude : state.altitude;
     state.altitude = alt;
-    state.closeZoom = alt < 1.85;
-    // Rebuild when crossing pin-size bands so markers stay crisp and readable
-    const sizeBand = alt > 2.2 ? 0 : (alt > 1.5 ? 1 : 2);
+    state.closeZoom = IS_MOBILE ? alt < 1.15 : alt < 1.85;
+    document.body.classList.toggle('mobile-close-zoom', IS_MOBILE && state.closeZoom);
+    // Rebuild when crossing pin-size / mobile reserve-visibility bands
+    let sizeBand;
+    if (IS_MOBILE) {
+      // >1.3 hide reserves; 1.05–1.3 subsample; <1.05 all
+      sizeBand = alt > 1.3 ? 0 : (alt >= 1.05 ? 1 : 2);
+    } else {
+      sizeBand = alt > 2.2 ? 0 : (alt > 1.5 ? 1 : 2);
+    }
     if (sizeBand !== state._sizeBand) {
       state._sizeBand = sizeBand;
-      if (state.layers.reserves) applyLayers();
+      if (state.layers.reserves || IS_MOBILE) applyLayers();
     }
   }
 
@@ -1112,9 +1158,19 @@
     resize();
     window.addEventListener("resize", resize);
 
+    // Cap DPR on mobile Safari — full retina WebGL with 2200+ points is too heavy
+    try {
+      const r = globe.renderer && globe.renderer();
+      if (r && r.setPixelRatio) {
+        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 2));
+      }
+    } catch (e) {
+      console.warn('[DEWFALL] setPixelRatio failed', e);
+    }
+
     const ctrl = globe.controls();
     ctrl.autoRotate = true;
-    ctrl.autoRotateSpeed = 0.45;
+    ctrl.autoRotateSpeed = IS_MOBILE ? 0.22 : 0.45;
     ctrl.enableDamping = true;
     ctrl.minDistance = 120;
     ctrl.maxDistance = 800;
@@ -1130,9 +1186,12 @@
     el.addEventListener("wheel", bumpIdle, { passive: true });
     el.addEventListener("touchstart", bumpIdle, { passive: true });
 
-    globe.pointOfView({ lat: 52, lng: -92, altitude: 1.9 }, 0);
-    state.altitude = 1.9;
+    // Prefer Canada framing a bit closer on phones so taps matter sooner
+    const startAlt = IS_MOBILE ? 2.05 : 1.9;
+    globe.pointOfView({ lat: 52, lng: -92, altitude: startAlt }, 0);
+    state.altitude = startAlt;
     state.closeZoom = false;
+    if (IS_MOBILE) document.body.classList.remove('mobile-close-zoom');
     refresh();
 
     setTimeout(() => {
