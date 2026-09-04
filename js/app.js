@@ -98,7 +98,7 @@
     season: 'summer',
     layers: {
       yield: true,
-      humidity: !IS_MOBILE,   // mist/rings choke mobile WebGL — off by default on phone
+      humidity: false,        // off by default — rings make the map too busy
       dewpoint: false,        // HTML labels costly on iOS
       reserves: true,
       otherFn: false,
@@ -783,7 +783,7 @@
     // Hexbins removed — they read as blurry dots at country scale.
     globe.hexBinPointsData([]);
 
-    // Humidity rings + northern LTDWA pulses
+    // Rings: humidity mist only (OFF by default). Never auto-ring every need site.
     const mist = [];
     if (state.layers.humidity && enriched.length) {
       enriched.filter((c) => c.yield.AH >= 8).forEach((c) => {
@@ -802,27 +802,20 @@
         });
       });
     }
-    if (state.layers.ltdwa && !(IS_MOBILE && !state.layers.humidity && state.altitude > 1.6)) {
-      // On mobile with mist off + far zoom, skip need rings (HTML pins remain) to cut GPU load.
-      const skipNeedRings = IS_MOBILE && !state.layers.humidity;
-      if (!skipNeedRings) {
-        visibleFn().forEach((c) => {
-          const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
-          const isSouth = c.remoteness === 'southern' || c.remoteness === 'road-access';
-          mist.push({
-            lat: c.lat,
-            lng: c.lng,
-            maxR: isNorth ? 2.8 : (isSouth ? 2.4 : 2.2),
-            propagationSpeed: 0.55,
-            repeatPeriod: isNorth ? 900 : 1200,
-            color: function () {
-              if (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') return 'rgba(224, 72, 56, 0.42)';
-              if (c.term === 'short') return 'rgba(255, 200, 64, 0.38)';
-              return isNorth ? 'rgba(255, 90, 50, 0.42)' : 'rgba(255, 160, 40, 0.4)';
-            },
-          });
+    // Optional northern-only pulse when highlight toggle is on
+    if (state.layers.ltdwa && state.layers.northern) {
+      visibleFn().forEach((c) => {
+        const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
+        if (!isNorth) return;
+        mist.push({
+          lat: c.lat,
+          lng: c.lng,
+          maxR: 2.4,
+          propagationSpeed: 0.55,
+          repeatPeriod: 1100,
+          color: function () { return 'rgba(255, 90, 50, 0.35)'; },
         });
-      }
+      });
     }
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
@@ -831,26 +824,16 @@
       .ringRepeatPeriod('repeatPeriod')
       .ringColor('color');
 
-    // HTML: dewpoint labels + LTDWA need pins (always on top, larger)
+    // HTML overlays: dewpoint (opt) + water-need pins (dot only — names in sheet/tooltip)
     const htmlItems = [];
     if (state.layers.dewpoint && enriched.length) {
       enriched.forEach((c) => {
         htmlItems.push({ kind: 'dp', lat: c.lat, lng: c.lng, city: c });
       });
     }
-    // Need-site pulse rings only when "Northern remote highlight" is on — otherwise too busy
-    if (state.layers.ltdwa && state.layers.northern) {
+    if (state.layers.ltdwa) {
       visibleFn().forEach((c) => {
-        const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
-        if (!isNorth) return;
-        mist.push({
-          lat: c.lat,
-          lng: c.lng,
-          maxR: 2.8,
-          propagationSpeed: 0.55,
-          repeatPeriod: 900,
-          color: function () { return 'rgba(255, 90, 50, 0.42)'; },
-        });
+        htmlItems.push({ kind: 'fn', lat: c.lat, lng: c.lng, city: c });
       });
     }
 
