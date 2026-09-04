@@ -11,12 +11,20 @@
  *   - Regenerating sorbent + Tier-5 TEC cassettes: assist in drier/hot air,
  *     gated by local AI on dew point, temps, airflow, available solar energy
  *
+ * Solar (GHI / untapped TEC-branch harvest): offline lat/lng empirical model —
+ * NOT a utility interconnection study. See estimateSiteSolar().
+ *
  * ALL OUTPUTS ARE MODEL ESTIMATES. Machine not complete; nothing measured.
  */
 (function (global) {
   'use strict';
 
   const R_V = 461.52;
+
+  /** DEWFALL TEC solar-branch array assumptions (transparent). */
+  const SOLAR_ARRAY_KWP = 0.6;   // 600 W_p — mid of ~0.4–0.8 kW_p class
+  const SOLAR_PR = 0.75;         // performance ratio (inverter, soiling, temp, wiring)
+  const SOLAR_GHI_REF = 5.5;     // kWh/m²/day — maps GHI → yield solarFactor scale
 
   function psatPa(T_c) {
     // Buck 1981 over liquid water
@@ -37,15 +45,127 @@
     return (pv / (R_V * T_k)) * 1000.0;
   }
 
-  /** Rough clear-sky solar availability proxy 0–1 by latitude + season. */
+  /**
+   * Empirical clear-sky + cloud-adjusted GHI (kWh/m²/day).
+   * Offline from lat/lng (+ optional RH). Calibrated toward:
+   *   Phoenix ~5.7–6.0 · southern AB/SK ~4.0–4.3 · coastal BC ~2.8–3.2 ·
+   *   Fort Severn / mid-north ON ~2.8–3.0 · high Arctic ~2.2–2.5
+   */
+  function estimateGHI(lat, lng, season, rh) {
+    const absLat = Math.abs(lat || 0);
+    const latRad = absLat * Math.PI / 180;
+    let clear = 6.85 * Math.pow(Math.max(0.08, Math.cos(latRad)), 0.88);
+    if (absLat > 58) clear *= 1 + 0.10 * Math.min(1, (absLat - 58) / 12);
+    clear = Math.max(1.9, Math.min(7.2, clear));
+
+    let cloud = 0.78;
+    if (lng != null && !isNaN(lng)) {
+      if (lng < -120 && lng > -132 && absLat >= 44 && absLat <= 55) cloud = 0.64; // PNW / coastal BC
+      else if (lng >= -114.5 && lng <= -100 && absLat >= 48.5 && absLat <= 53.5) cloud = 0.90; // southern prairies
+      else if (lng >= -118 && lng <= -104 && absLat >= 31 && absLat <= 38) cloud = 0.96; // US Southwest
+      else if (lng >= -115 && lng <= -105 && absLat >= 38 && absLat <= 42) cloud = 0.92; // high desert
+      else if (lng >= -125 && lng <= -110 && absLat >= 30 && absLat <= 42) cloud = 0.93;
+      else if (lng >= -98 && lng <= -78 && absLat >= 24 && absLat <= 35) cloud = 0.74; // Gulf / SE
+      else if (absLat >= 50 && absLat <= 62 && lng >= -95 && lng <= -70) cloud = 0.74; // Hudson Bay belt
+      else if (absLat > 60) cloud = 0.72;
+    }
+    if (rh != null && !isNaN(rh)) {
+      const rhAdj = (0.55 - rh) * 0.18;
+      cloud = Math.max(0.48, Math.min(0.98, cloud + rhAdj));
+    }
+
+    const annual = clear * cloud;
+    let summerMul, winterMul;
+    {
+      const boost = 1.12 + 0.38 * Math.sin(latRad);
+      const cut = 0.50 + 0.38 * Math.cos(latRad);
+      if ((lat || 0) >= 0) {
+        summerMul = boost;
+        winterMul = cut;
+      } else {
+        summerMul = Math.max(0.7, 1.85 - boost);
+        winterMul = Math.min(1.35, 1.7 - cut * 0.4);
+      }
+    }
+    const summer = annual * summerMul;
+    const winter = annual * winterMul;
+    let ghi = annual;
+    if (season === 'summer') ghi = summer;
+    else if (season === 'winter') ghi = winter;
+
+    return {
+      ghi: +ghi.toFixed(2),
+      annual: +annual.toFixed(2),
+      summer: +summer.toFixed(2),
+      winter: +winter.toFixed(2),
+      clearSky: +clear.toFixed(2),
+      cloudFactor: +cloud.toFixed(2),
+      unit: 'kWh/m²/day',
+      estimated: true,
+    };
+  }
+
+  /**
+   * PV harvest for DEWFALL TEC solar-branch array.
+   * E_year = GHI_daily × 365 × kW_p × PR
+   * While undeployed, this harvest is treated as 100% untapped for the TEC branch.
+   */
+  function estimatePVHarvest(ghiDaily, kwp, pr) {
+    const k = kwp != null ? kwp : SOLAR_ARRAY_KWP;
+    const p = pr != null ? pr : SOLAR_PR;
+    const daily = ghiDaily * k * p;
+    const yearly = daily * 365;
+    return {
+      kwp: k,
+      pr: p,
+      kWhPerDay: +daily.toFixed(2),
+      kWhPerYear: Math.round(yearly),
+      untapped: true,
+      note: 'Untapped until DEWFALL deployed — 100% of modeled TEC-branch PV harvest',
+    };
+  }
+
+  /** Full site solar resource + untapped TEC-branch estimate. */
+  function estimateSiteSolar(lat, lng, season, rh) {
+    const ghi = estimateGHI(lat, lng, season || 'annual', rh);
+    const harvest = estimatePVHarvest(ghi.ghi);
+    const harvestAnnual = estimatePVHarvest(ghi.annual);
+    // Resource index from GHI (display); yield gate remains solarFactor(lat, season)
+    const resourceFactor = Math.min(1, Math.max(0.2, ghi.ghi / SOLAR_GHI_REF));
+    return {
+      ghi: ghi.ghi,
+      ghiAnnual: ghi.annual,
+      ghiSummer: ghi.summer,
+      ghiWinter: ghi.winter,
+      clearSky: ghi.clearSky,
+      cloudFactor: ghi.cloudFactor,
+      unit: ghi.unit,
+      arrayKwp: harvest.kwp,
+      pr: harvest.pr,
+      kWhPerDay: harvest.kWhPerDay,
+      kWhPerYear: harvest.kWhPerYear,
+      untappedKWhYear: harvest.kWhPerYear,
+      untappedKWhYearAnnual: harvestAnnual.kWhPerYear,
+      resourceFactor: +resourceFactor.toFixed(2),
+      untapped: true,
+      estimated: true,
+      disclaimer: 'Irradiance model estimate — not a utility interconnection study.',
+    };
+  }
+
+  /**
+   * Rough clear-sky solar availability proxy 0–1 by latitude + season.
+   * Used by the yield TEC gate. Kept stable so L/day calibration does not drift;
+   * GHI / untapped PV use estimateSiteSolar() separately.
+   */
   function solarFactor(lat, season) {
-    const absLat = Math.abs(lat);
+    const absLat = Math.abs(lat || 0);
     let base = Math.max(0.25, 1 - absLat / 90);
     if (season === 'summer') {
       // More sun toward summer hemisphere; we approximate N-hem bias for 'summer'
-      base *= lat >= 0 ? 1.25 : 0.85;
+      base *= (lat || 0) >= 0 ? 1.25 : 0.85;
     } else if (season === 'winter') {
-      base *= lat >= 0 ? 0.7 : 1.15;
+      base *= (lat || 0) >= 0 ? 0.7 : 1.15;
     }
     return Math.min(1, Math.max(0.2, base));
   }
@@ -157,7 +277,10 @@
   function enrichCity(city, season) {
     const bin = city.climate[season] || city.climate.annual;
     const y = estimateYield(bin.T, bin.RH, city.lat, season);
-    return Object.assign({}, city, { season, bin, yield: y });
+    const solar = estimateSiteSolar(city.lat, city.lng, season, bin.RH);
+    // Attach yield-gate factor onto site solar for tooltips
+    solar.yieldSolarFactor = y.solar;
+    return Object.assign({}, city, { season, bin, yield: y, solar });
   }
 
   function enrichAll(cities, season) {
@@ -193,6 +316,30 @@
     return lerpColor([80, 100, 120], [180, 230, 255], t);
   }
 
+  /** GHI color: soft gold → deep orange (low → high irradiance). */
+  function solarColor(ghi, minRef, maxRef) {
+    const lo = minRef != null ? minRef : 2.0;
+    const hi = maxRef != null ? maxRef : 5.8;
+    const t = Math.max(0, Math.min(1, (ghi - lo) / (hi - lo || 1)));
+    const stops = [
+      [0.00, [232, 200, 120]], // soft gold
+      [0.40, [240, 168, 48]],  // amber gold
+      [0.70, [232, 120, 36]],  // orange
+      [1.00, [180, 56, 16]],   // deep orange
+    ];
+    let a = stops[0][1], b = stops[stops.length - 1][1], u = t;
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i][0] && t <= stops[i + 1][0]) {
+        const span = stops[i + 1][0] - stops[i][0] || 1;
+        u = (t - stops[i][0]) / span;
+        a = stops[i][1];
+        b = stops[i + 1][1];
+        break;
+      }
+    }
+    return lerpColor(a, b, u);
+  }
+
   global.DEWFALL_YIELD = {
     dewpointC,
     absHumidityGm3,
@@ -202,5 +349,11 @@
     yieldColor,
     humidityColor,
     solarFactor,
+    estimateGHI,
+    estimatePVHarvest,
+    estimateSiteSolar,
+    solarColor,
+    SOLAR_ARRAY_KWP,
+    SOLAR_PR,
   };
 })(window);

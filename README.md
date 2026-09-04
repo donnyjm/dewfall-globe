@@ -34,6 +34,28 @@ A static server is required so CDN libraries and modules load correctly (avoid `
 
 
 
+
+## Solar potential / untapped TEC-branch harvest
+
+Toggle **Solar potential** to recolor First Nations reserve pins by modeled **GHI** (gold → deep orange) and show untapped solar available to DEWFALL’s dedicated TEC solar branch.
+
+**What “untapped / missing” means:** until a DEWFALL unit is installed at a site, **100%** of the modeled PV harvest for the TEC/solar-branch array is treated as untapped. The UI labels this explicitly (“Untapped until DEWFALL deployed”).
+
+### Model assumptions (transparent)
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Array size | **0.6 kW<sub>p</sub>** | Mid of ~0.4–0.8 kW<sub>p</sub> class sized for the TEC branch |
+| Performance ratio | **0.75** | Inverter, soiling, temperature, wiring |
+| Annual energy | `GHI_daily × 365 × kW_p × PR` | Standard PV approximation |
+| GHI | Offline lat/lng (+ optional RH) empirical clear-sky × cloud proxy | Calibrated toward Canadian/US class values — **not** a utility interconnection study |
+
+Sample annual GHI (model): Phoenix ~5.7 · southern AB ~4.2 · North Vancouver ~2.8 · Fort Severn ~2.9 kWh/m²/day.
+
+Yield TEC gating still uses the existing `solarFactor(lat, season)` in `js/yield.js` so L/day calibration does not drift; tooltips show both GHI and the yield solar factor.
+
+Stats strip (when solar layer ON): peak GHI among visible water-need sites, average GHI on those sites, and total untapped kWh/year rollup.
+
 ## First Nations reserves (nationwide)
 
 Toggle **All First Nations reserves** (default ON) to show NRCan **Aboriginal Lands of Canada Legislative Boundaries** centroids for Indian Reserves (IR) across Canada.

@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#050a12" />
   <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
   <title>DEWFALL · Where water falls from air</title>
   <link rel="stylesheet" href="css/styles.css" />
@@ -17,6 +21,8 @@
 
   <div id="globeViz" role="img" aria-label="Interactive 3D Earth globe showing DEWFALL estimated water yield, First Nations reserves across Canada, and LTDWA need sites"></div>
 
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden aria-hidden="true"></div>
+
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">DF</div>
@@ -25,21 +31,34 @@
         <p>Mekilok · North Vancouver · Alpha AWG</p>
       </div>
     </div>
-    <div class="disclaimer-banner">
+    <div class="disclaimer-banner" id="disclaimer-banner">
       <strong>Model estimates only.</strong>
       Yields are climate-based projections — not measured.
       Machine incomplete. Design target ~10–20 L/day residential.
+      <button type="button" class="banner-dismiss" id="disclaimer-dismiss" aria-label="Dismiss disclaimer">×</button>
     </div>
   </header>
 
   <div class="ltdwa-banner" id="ltdwa-banner" role="status">
-    <strong id="banner-title">First Nations reserves</strong>
-    <span id="banner-stats">· loading…</span>
+    <div class="ltdwa-banner-main">
+      <strong id="banner-title">First Nations reserves</strong>
+      <span id="banner-stats">· loading…</span>
+    </div>
     <span class="ltdwa-banner-note" id="banner-note">Amber/red = long-term · Gold = short-term · ISC + FNHA BC</span>
+    <button type="button" class="banner-dismiss" id="ltdwa-dismiss" aria-label="Dismiss banner">×</button>
   </div>
 
-  <aside class="panel controls" aria-label="Map controls">
-    <h2>Visualization</h2>
+  <div class="mobile-fabs" id="mobile-fabs" aria-label="Mobile panels">
+    <button type="button" class="fab" id="fab-layers" aria-expanded="false" aria-controls="panel-controls">Layers</button>
+    <button type="button" class="fab fab-list" id="fab-list" aria-expanded="false" aria-controls="panel-rank">List</button>
+  </div>
+
+  <aside class="panel controls" id="panel-controls" aria-label="Map controls">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2>Visualization</h2>
+      <button type="button" class="sheet-close" id="close-layers" aria-label="Close layers">×</button>
+    </div>
     <div class="ctrl-group">
       <label class="group-label">Season climate bin</label>
       <div class="seg" role="group">
@@ -58,6 +77,7 @@
         <label class="toggle toggle-reserve"><input type="checkbox" id="layer-other-fn" /> Other FN settlement lands</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-ltdwa" checked /> Water need (long + short)</label>
         <label class="toggle toggle-need"><input type="checkbox" id="layer-northern" /> Northern remote highlight</label>
+        <label class="toggle toggle-solar"><input type="checkbox" id="layer-solar" /> Solar potential</label>
         <label class="toggle"><input type="checkbox" id="layer-rotate" checked /> Auto-rotate</label>
       </div>
     </div>
@@ -72,15 +92,25 @@
         <span class="need-swatch north"></span> Northern remote
       </div>
       <div class="legend-need legend-bc">BC DWAs from FNHA (Aug 2026) included in need layer</div>
+      <div class="legend-solar" id="legend-solar">
+        <div class="legend-bar legend-bar-solar" title="Low to high GHI"></div>
+        <div class="legend-labels"><span>Lower GHI</span><span>Higher solar</span></div>
+        <div class="legend-need">Gold → deep orange = annual GHI model · Untapped = TEC-branch PV until DEWFALL deployed</div>
+        <div class="legend-need legend-bc">Irradiance model estimates — not a utility interconnection study</div>
+      </div>
     </div>
-    <p class="hint">Silver = NRCan Indian Reserves nationwide. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Cyan pillars = estimated L/day. Not a northern-only story — includes BC, Prairies, Atlantic, southern ON.</p>
+    <p class="hint">Density = NRCan Indian Reserves. Amber/red = long-term need · Gold = short-term (ISC + FNHA BC). Cyan pillars = estimated L/day. <strong>Solar potential</strong> recolors reserves by GHI and shows untapped TEC-branch PV (model).</p>
   </aside>
 
-  <aside class="panel rank-panel" aria-label="Rankings">
+  <aside class="panel rank-panel" id="panel-rank" aria-label="Rankings">
+    <div class="sheet-handle" aria-hidden="true"></div>
     <header>
-      <div class="rank-tabs" role="tablist">
-        <button type="button" class="rank-tab active" data-rank="yield" role="tab">Yield</button>
-        <button type="button" class="rank-tab" data-rank="need" role="tab">Water need</button>
+      <div class="sheet-head sheet-head-inline">
+        <div class="rank-tabs" role="tablist">
+          <button type="button" class="rank-tab active" data-rank="yield" role="tab">Yield</button>
+          <button type="button" class="rank-tab" data-rank="need" role="tab">Water need</button>
+        </div>
+        <button type="button" class="sheet-close" id="close-list" aria-label="Close list">×</button>
       </div>
       <h2 id="rank-title">Where DEWFALL produces most</h2>
       <p id="rank-sub">Ranked by modeled L/day · click to fly</p>
@@ -89,10 +119,10 @@
   </aside>
 
   <div class="panel stats" aria-label="Summary stats">
-    <div class="stat"><div class="val" id="stat-peak">—</div><div class="lbl">Peak est.</div></div>
-    <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl">Avg est.</div></div>
-    <div class="stat"><div class="val" id="stat-top">—</div><div class="lbl">Top city</div></div>
-    <div class="stat"><div class="val" id="stat-high">—</div><div class="lbl">≥10 L cities</div></div>
+    <div class="stat"><div class="val" id="stat-peak">—</div><div class="lbl" id="stat-peak-lbl">Peak est.</div></div>
+    <div class="stat"><div class="val" id="stat-avg">—</div><div class="lbl" id="stat-avg-lbl">Avg est.</div></div>
+    <div class="stat"><div class="val" id="stat-top">—</div><div class="lbl" id="stat-top-lbl">Top city</div></div>
+    <div class="stat"><div class="val" id="stat-high">—</div><div class="lbl" id="stat-high-lbl">≥10 L cities</div></div>
   </div>
 
   <aside class="panel product-strip">
@@ -104,7 +134,10 @@
     <div class="attr">Data: NRCan ALC · ISC LTDWA Aug 2026 · ISC short-term Sep 2026 · FNHA DWA Aug 2026</div>
   </aside>
 
-  <div id="tooltip" class="tooltip-card" role="dialog" aria-label="Site details"></div>
+  <div id="tooltip" class="tooltip-card" role="dialog" aria-label="Site details" aria-modal="false">
+    <button type="button" class="tooltip-close" id="tooltip-close" aria-label="Close details">×</button>
+    <div class="tooltip-body" id="tooltip-body"></div>
+  </div>
 
   <script src="js/loader.js"></script>
 </body>

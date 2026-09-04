@@ -77,6 +77,16 @@
   const DEFAULT_RESERVE_TYPES = new Set(RES_META.defaultTypes || ['IR']);
   const OPTIONAL_RESERVE_TYPES = new Set(RES_META.optionalTypes || ['IL', 'SHL', 'CRN', 'SRN', 'YFN']);
 
+  /** iPhone / coarse-pointer / narrow viewport — drives UX + WebGL defaults. */
+  function detectMobile() {
+    try {
+      if (window.matchMedia('(max-width: 820px), (pointer: coarse)').matches) return true;
+    } catch (e) {}
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod|Android|Mobile/i.test(ua);
+  }
+  const IS_MOBILE = detectMobile();
+
   const REMOTE_WEIGHT = {
     'remote-northern': 3.0,
     'remote': 2.2,
@@ -88,12 +98,13 @@
     season: 'annual',
     layers: {
       yield: true,
-      humidity: true,
-      dewpoint: false,
+      humidity: !IS_MOBILE,   // mist/rings choke mobile WebGL — off by default on phone
+      dewpoint: false,        // HTML labels costly on iOS
       reserves: true,
       otherFn: false,
       ltdwa: true,
       northern: false,
+      solar: false,
     },
     autoRotate: true,
     selectedId: null,
@@ -102,6 +113,9 @@
     idleTimer: null,
     closeZoom: false,
     altitude: 1.9,
+    mobileTouched: false,
+    openSheet: null, // 'layers' | 'list' | null
+    tooltipPinned: false,
   };
 
   let globe = null;
@@ -109,6 +123,7 @@
   let enrichedFn = [];
   let fnById = {};
   let tooltipEl = null;
+  let tooltipBodyEl = null;
   let zoomRaf = null;
 
   const $ = (s) => document.querySelector(s);
@@ -137,6 +152,57 @@
     const gg = Math.round(a[1] + (b[1] - a[1]) * u);
     const bb = Math.round(a[2] + (b[2] - a[2]) * u);
     return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
+  }
+
+
+  /** Cache site-solar estimates (2200+ reserves — compute once per season). */
+  const solarCache = Object.create(null);
+  function siteSolar(lat, lng, season, rh) {
+    const s = season || state.season || 'annual';
+    const key = (lat != null ? (+lat).toFixed(3) : 'x') + ',' +
+      (lng != null ? (+lng).toFixed(3) : 'x') + ',' + s + ',' +
+      (rh != null ? (+rh).toFixed(2) : 'n');
+    if (solarCache[key]) return solarCache[key];
+    const out = Y.estimateSiteSolar(lat, lng, s, rh);
+    solarCache[key] = out;
+    return out;
+  }
+
+  function solarForEntity(ent) {
+    if (ent && ent.solar) return ent.solar;
+    const lat = ent.lat, lng = ent.lng;
+    let rh = null;
+    if (ent.bin && ent.bin.RH != null) rh = ent.bin.RH;
+    else if (ent.climate) {
+      const bin = ent.climate[state.season] || ent.climate.annual;
+      if (bin && bin.RH != null) rh = bin.RH;
+    }
+    return siteSolar(lat, lng, state.season, rh);
+  }
+
+  function formatKWh(n) {
+    if (n == null || isNaN(n)) return '—';
+    if (n >= 10000) return (n / 1000).toFixed(1) + ' MWh';
+    if (n >= 1000) return (n / 1000).toFixed(2) + ' MWh';
+    return Math.round(n) + ' kWh';
+  }
+
+  function solarTooltipBlock(sol, yieldSolarFactor) {
+    if (!sol) return '';
+    const yf = yieldSolarFactor != null ? yieldSolarFactor : sol.yieldSolarFactor;
+    return (
+      '<div class="tc-grid solar-grid">' +
+        '<div class="tc-cell"><div class="k">GHI (model)</div><div class="v solar-v">' + sol.ghi + ' <span class="unit">kWh/m²/day</span></div></div>' +
+        '<div class="tc-cell"><div class="k">Est. PV harvest</div><div class="v solar-v">' + formatKWh(sol.kWhPerYear) + '<span class="unit">/yr</span></div></div>' +
+        '<div class="tc-cell span2"><div class="k">Untapped for DEWFALL TEC branch</div><div class="v big solar-v">' +
+          formatKWh(sol.untappedKWhYear) + ' <span class="model-only">until deployed</span></div></div>' +
+        '<div class="tc-cell"><div class="k">Summer / winter GHI</div><div class="v">' + sol.ghiSummer + ' / ' + sol.ghiWinter + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Yield solar factor</div><div class="v">' +
+          (yf != null ? yf : '—') + '</div></div>' +
+      '</div>' +
+      '<div class="solar-untapped-note">100% of modeled TEC-branch array harvest is untapped until a DEWFALL unit is installed. ' +
+        'Array assumption: ' + sol.arrayKwp + ' kW<sub>p</sub> · PR ' + sol.pr + '.</div>'
+    );
   }
 
   function needSignal(c) {
@@ -179,6 +245,15 @@
 
   function initUI() {
     tooltipEl = $('#tooltip');
+    tooltipBodyEl = $('#tooltip-body') || tooltipEl;
+    if (IS_MOBILE) {
+      document.body.classList.add('mobile-ui');
+      // Sync checkbox defaults to mobile layer state
+      const hum = $('#layer-humidity');
+      if (hum) hum.checked = !!state.layers.humidity;
+      const dp = $('#layer-dewpoint');
+      if (dp) dp.checked = !!state.layers.dewpoint;
+    }
     FN.forEach((c) => { fnById[c.id] = c; });
 
     document.querySelectorAll('[data-season]').forEach((btn) => {
@@ -190,7 +265,7 @@
       });
     });
 
-    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'northern'].forEach((key) => {
+    ['yield', 'humidity', 'dewpoint', 'reserves', 'ltdwa', 'northern', 'solar'].forEach((key) => {
       const el = $('#layer-' + (key === 'reserves' ? 'reserves' : key));
       if (!el) return;
       el.checked = !!state.layers[key];
@@ -199,10 +274,17 @@
         if (key === 'ltdwa' || key === 'northern' || key === 'reserves') {
           updateLtdwaBanner();
           if (state.rankMode === 'need') updateRankList();
+          if (state.layers.solar) updateStats();
+        }
+        if (key === 'solar') {
+          document.body.classList.toggle('solar-layer-on', !!state.layers.solar);
+          updateStats();
+          updateLtdwaBanner();
         }
         applyLayers();
       });
     });
+    document.body.classList.toggle('solar-layer-on', !!state.layers.solar);
 
     const otherEl = $('#layer-other-fn');
     if (otherEl) {
@@ -216,10 +298,15 @@
 
     const rot = $('#layer-rotate');
     if (rot) {
-      rot.checked = true;
+      rot.checked = !!state.autoRotate;
       rot.addEventListener('change', () => {
         state.autoRotate = rot.checked;
-        if (globe) globe.controls().autoRotate = state.autoRotate;
+        if (globe) {
+          globe.controls().autoRotate = state.autoRotate;
+          if (state.autoRotate && IS_MOBILE) {
+            globe.controls().autoRotateSpeed = 0.22;
+          }
+        }
       });
     }
 
@@ -232,7 +319,112 @@
       });
     });
 
+    initMobileChrome();
     updateLtdwaBanner();
+  }
+
+  function closeSheets() {
+    state.openSheet = null;
+    const controls = $('#panel-controls');
+    const rank = $('#panel-rank');
+    const backdrop = $('#sheet-backdrop');
+    const fabL = $('#fab-layers');
+    const fabR = $('#fab-list');
+    if (controls) controls.classList.remove('open');
+    if (rank) rank.classList.remove('open');
+    if (backdrop) {
+      backdrop.classList.remove('show');
+      backdrop.hidden = true;
+      backdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (fabL) fabL.setAttribute('aria-expanded', 'false');
+    if (fabR) fabR.setAttribute('aria-expanded', 'false');
+  }
+
+  function openSheet(which) {
+    if (!IS_MOBILE) return;
+    closeSheets();
+    hideTooltip();
+    state.openSheet = which;
+    const backdrop = $('#sheet-backdrop');
+    if (backdrop) {
+      backdrop.hidden = false;
+      backdrop.classList.add('show');
+      backdrop.setAttribute('aria-hidden', 'false');
+    }
+    if (which === 'layers') {
+      const el = $('#panel-controls');
+      if (el) el.classList.add('open');
+      const fab = $('#fab-layers');
+      if (fab) fab.setAttribute('aria-expanded', 'true');
+    } else if (which === 'list') {
+      const el = $('#panel-rank');
+      if (el) el.classList.add('open');
+      const fab = $('#fab-list');
+      if (fab) fab.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function initMobileChrome() {
+    const fabL = $('#fab-layers');
+    const fabR = $('#fab-list');
+    const closeL = $('#close-layers');
+    const closeR = $('#close-list');
+    const backdrop = $('#sheet-backdrop');
+    const tipClose = $('#tooltip-close');
+    const discDismiss = $('#disclaimer-dismiss');
+    const ltdwaDismiss = $('#ltdwa-dismiss');
+
+    if (fabL) {
+      fabL.addEventListener('click', () => {
+        if (state.openSheet === 'layers') closeSheets();
+        else openSheet('layers');
+      });
+    }
+    if (fabR) {
+      fabR.addEventListener('click', () => {
+        if (state.openSheet === 'list') closeSheets();
+        else openSheet('list');
+      });
+    }
+    if (closeL) closeL.addEventListener('click', closeSheets);
+    if (closeR) closeR.addEventListener('click', closeSheets);
+    if (backdrop) {
+      backdrop.addEventListener('click', () => {
+        if (tooltipEl && tooltipEl.classList.contains('visible') && state.tooltipPinned) {
+          hideTooltip();
+          return;
+        }
+        closeSheets();
+      });
+    }
+    if (tipClose) tipClose.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      hideTooltip();
+    });
+    if (discDismiss) {
+      discDismiss.addEventListener('click', () => {
+        const b = $('#disclaimer-banner');
+        if (b) b.classList.add('hidden');
+      });
+    }
+    if (ltdwaDismiss) {
+      ltdwaDismiss.addEventListener('click', () => {
+        const b = $('#ltdwa-banner');
+        if (b) b.classList.add('hidden');
+      });
+    }
+
+    // Tap outside tooltip (globe) closes pinned mobile sheet tooltip
+    document.addEventListener('click', (ev) => {
+      if (!IS_MOBILE || !state.tooltipPinned) return;
+      if (!tooltipEl || !tooltipEl.classList.contains('visible')) return;
+      if (tooltipEl.contains(ev.target)) return;
+      if (ev.target.closest && ev.target.closest('.fn-pin')) return;
+      // Allow sheet FABs without immediately fighting
+      if (ev.target.closest && (ev.target.closest('.fab') || ev.target.closest('.panel'))) return;
+      hideTooltip();
+    }, true);
   }
 
   function updateLtdwaBanner() {
@@ -262,13 +454,18 @@
       } else stats.textContent = '';
     }
     if (note) {
-      note.textContent = showNeed
-        ? ('Amber/red = long-term · Gold = short-term · BC via FNHA (' + bcN + ') · need ≠ high yield')
-        : 'Silver = all IR (NRCan ALC) · need layer off';
+      if (state.layers.solar) {
+        note.textContent = 'Solar potential ON · reserves recolored by GHI (gold→deep orange) · untapped = modeled TEC-branch PV until DEWFALL deployed · model, not interconnection study';
+      } else {
+        note.textContent = showNeed
+          ? ('Amber/red = long-term · Gold = short-term · BC via FNHA (' + bcN + ') · need ≠ high yield')
+          : 'Silver = all IR (NRCan ALC) · need layer off';
+      }
     }
   }
 
   function refresh() {
+    for (const k of Object.keys(solarCache)) delete solarCache[k];
     enriched = Y.enrichAll(CITIES, state.season);
     enrichedFn = FN.map((c) => {
       const e = Y.enrichCity(c, state.season);
@@ -289,6 +486,35 @@
   }
 
   function updateStats() {
+    const strip = $('.stats');
+    if (state.layers.solar) {
+      if (strip) strip.classList.add('solar-stats');
+      const need = visibleFn();
+      setText('#stat-peak-lbl', 'Peak GHI');
+      setText('#stat-avg-lbl', 'Avg GHI (need)');
+      setText('#stat-top-lbl', 'Peak site');
+      setText('#stat-high-lbl', 'Untapped /yr');
+      if (!need.length) {
+        setText('#stat-peak', '—');
+        setText('#stat-avg', '—');
+        setText('#stat-top', '—');
+        setText('#stat-high', '—');
+        return;
+      }
+      let peak = null, sum = 0, untapped = 0;
+      need.forEach((c) => {
+        const sol = c.solar || solarForEntity(c);
+        sum += sol.ghi;
+        untapped += sol.untappedKWhYear || 0;
+        if (!peak || sol.ghi > peak.ghi) peak = { ghi: sol.ghi, name: c.name };
+      });
+      setText('#stat-peak', peak.ghi.toFixed(2));
+      setText('#stat-avg', (sum / need.length).toFixed(2));
+      setText('#stat-top', peak ? shortName(peak.name) : '—');
+      setText('#stat-high', formatKWh(untapped));
+      return;
+    }
+    if (strip) strip.classList.remove('solar-stats');
     if (!enriched.length) return;
     const yields = enriched.map((c) => c.yield.yieldMid);
     const max = Math.max.apply(null, yields);
@@ -299,6 +525,10 @@
     setText('#stat-avg', avg.toFixed(1) + ' L');
     setText('#stat-top', top ? top.name.split(',')[0] : '\u2014');
     setText('#stat-high', String(highCount));
+    setText('#stat-peak-lbl', 'Peak est.');
+    setText('#stat-avg-lbl', 'Avg est.');
+    setText('#stat-top-lbl', 'Top city');
+    setText('#stat-high-lbl', '≥10 L cities');
   }
 
   function setText(sel, v) {
@@ -448,10 +678,10 @@
     if (!globe) return;
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
     const reserves = visibleReserves();
-    // Always draw crisp individual reserve markers (no blurry hexbins).
     const useReservePts = state.layers.reserves && reserves.length > 0;
+    // Mobile: at altitude > 1.3 hide individual reserves (keep yield + need); show all when zoomed in.
+    const showReservesNow = !IS_MOBILE || state.altitude < 1.3;
 
-    // Yield pillars + sharp reserve pins at every zoom
     const pts = [];
     if (state.layers.yield && enriched.length) {
       enriched.forEach((c) => {
@@ -468,10 +698,13 @@
         });
       });
     }
-    if (useReservePts) {
+    if (useReservePts && showReservesNow) {
       // Skip reserves that already have a larger LTDWA pin to reduce clutter
+      let idx = 0;
       reserves.forEach((r) => {
         if (r.hasLtdwa && state.layers.ltdwa) return;
+        // Far-ish mobile zoom: subsample every 2nd until very close (altitude already gated)
+        if (IS_MOBILE && state.altitude >= 1.05 && (idx++ % 2) === 1) return;
         pts.push({
           kind: 'reserve',
           id: r.id,
@@ -490,7 +723,11 @@
     }
 
     if (pts.length) {
-      const reserveR = state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07);
+      const reserveR = IS_MOBILE
+        ? (state.altitude > 1.1 ? 0.04 : 0.055)
+        : (state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07));
+      // Mobile: merge reserve-heavy point clouds for WebGL cost; desktop stays unmerged for crisp clicks.
+      const mergePts = IS_MOBILE && useReservePts && showReservesNow;
       globe
         .pointsData(pts)
         .pointLat('lat')
@@ -507,12 +744,22 @@
           return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
         })
         .pointColor((d) => {
-          if (d.kind === 'reserve') return reserveDensityColor(d);
+          if (d.kind === 'reserve') {
+            if (state.layers.solar) {
+              const sol = d._solar || siteSolar(d.lat, d.lng, state.season, null);
+              d._solar = sol;
+              return Y.solarColor(sol.ghi);
+            }
+            return reserveDensityColor(d);
+          }
+          if (state.layers.solar && d._city && d._city.solar) {
+            return Y.solarColor(d._city.solar.ghi);
+          }
           return Y.yieldColor(d.yield.yieldMid, maxY);
         })
-        .pointsMerge(false)
+        .pointsMerge(mergePts)
         .pointLabel(() => '')
-        .onPointHover(onPointHover)
+        .onPointHover(IS_MOBILE ? null : onPointHover)
         .onPointClick((d) => {
           if (!d) return;
           if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
@@ -544,23 +791,27 @@
         });
       });
     }
-    if (state.layers.ltdwa) {
-      visibleFn().forEach((c) => {
-        const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
-        const isSouth = c.remoteness === 'southern' || c.remoteness === 'road-access';
-        mist.push({
-          lat: c.lat,
-          lng: c.lng,
-          maxR: isNorth ? 2.8 : (isSouth ? 2.4 : 2.2),
-          propagationSpeed: 0.55,
-          repeatPeriod: isNorth ? 900 : 1200,
-          color: function () {
-            if (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') return 'rgba(224, 72, 56, 0.42)';
-            if (c.term === 'short') return 'rgba(255, 200, 64, 0.38)';
-            return isNorth ? 'rgba(255, 90, 50, 0.42)' : 'rgba(255, 160, 40, 0.4)';
-          },
+    if (state.layers.ltdwa && !(IS_MOBILE && !state.layers.humidity && state.altitude > 1.6)) {
+      // On mobile with mist off + far zoom, skip need rings (HTML pins remain) to cut GPU load.
+      const skipNeedRings = IS_MOBILE && !state.layers.humidity;
+      if (!skipNeedRings) {
+        visibleFn().forEach((c) => {
+          const isNorth = c.remoteness === 'remote-northern' || c.highlightNorthern;
+          const isSouth = c.remoteness === 'southern' || c.remoteness === 'road-access';
+          mist.push({
+            lat: c.lat,
+            lng: c.lng,
+            maxR: isNorth ? 2.8 : (isSouth ? 2.4 : 2.2),
+            propagationSpeed: 0.55,
+            repeatPeriod: isNorth ? 900 : 1200,
+            color: function () {
+              if (c.advisoryType === 'DNC' || c.advisoryType === 'DNU') return 'rgba(224, 72, 56, 0.42)';
+              if (c.term === 'short') return 'rgba(255, 200, 64, 0.38)';
+              return isNorth ? 'rgba(255, 90, 50, 0.42)' : 'rgba(255, 160, 40, 0.4)';
+            },
+          });
         });
-      });
+      }
     }
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
@@ -617,19 +868,23 @@
     el.className = 'fn-pin' + (isNorth ? ' northern' : '') + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (state.layers.northern && isNorth ? ' emphasis' : '');
     el.title = c.name;
+    // Mobile: always render label node but CSS hides until zoomed (dot-only cuts DOM paint cost)
     el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label">' +
       escapeHtml(shortName(c.name)) + '</span>';
-    el.addEventListener('mouseenter', (ev) => {
-      showFnTooltip(c, ev);
-      document.body.style.cursor = 'pointer';
-      bumpIdle();
-    });
-    el.addEventListener('mouseleave', () => {
-      hideTooltip();
-      document.body.style.cursor = 'default';
-    });
+    if (!IS_MOBILE) {
+      el.addEventListener('mouseenter', (ev) => {
+        showFnTooltip(c, ev);
+        document.body.style.cursor = 'pointer';
+        bumpIdle();
+      });
+      el.addEventListener('mouseleave', () => {
+        hideTooltip();
+        document.body.style.cursor = 'default';
+      });
+    }
     el.addEventListener('click', (ev) => {
       ev.stopPropagation();
+      ev.preventDefault();
       focusFn(c.id);
     });
     return el;
@@ -650,11 +905,19 @@
     bumpIdle();
   }
 
+  function tooltipContentEl() {
+    return document.getElementById('tooltip-body') || tooltipEl;
+  }
+  function setTooltipHtml(html) {
+    const el = tooltipContentEl();
+    el.innerHTML = html;
+  }
+
   function showCityTooltip(c, ev) {
     const y = c.yield;
     const badgeClass = 's' + y.score;
     tooltipEl.classList.remove('need-card', 'reserve-card');
-    tooltipEl.innerHTML =
+    setTooltipHtml(
       '<div class="tc-head">' +
         '<h3>' + escapeHtml(c.name) + '</h3>' +
         '<div class="sub">' + escapeHtml(c.region) + ' \u00b7 ' + escapeHtml(c.market || '') + '</div>' +
@@ -667,6 +930,7 @@
         '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' \u00b0C</div></div>' +
         '<div class="tc-cell"><div class="k">Abs. humidity</div><div class="v">' + y.AH + ' g/m\u00b3</div></div>' +
       '</div>' +
+      solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
       '<div class="tc-body">' +
         '<div class="why">' + escapeHtml(y.why) + '</div>' +
         '<div class="fit">' + escapeHtml(y.marketFit) + '</div>' +
@@ -675,8 +939,8 @@
           '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
           '<span>Solar factor: <strong>' + y.solar + '</strong></span>' +
         '</div>' +
-        '<div class="est-tag">MODEL ESTIMATE \u2014 not measured. Machine incomplete. Climate normals \u00b7 ' + escapeHtml(state.season) + ' season bin.</div>' +
-      '</div>';
+        '<div class="est-tag">MODEL ESTIMATE \u2014 not measured. Machine incomplete. Climate normals \u00b7 ' + escapeHtml(state.season) + ' season bin. Irradiance model \u2014 not a utility interconnection study.</div>' +
+      '</div>');
     positionTooltip(ev);
     tooltipEl.classList.add('visible');
   }
@@ -707,7 +971,7 @@
     const badge = ltdwa
       ? '<span class="badge ltdwa-link">On active water-need list</span>'
       : '<span class="badge reserve-badge">No active advisory on current need list</span>';
-    tooltipEl.innerHTML =
+    setTooltipHtml(
       '<div class="tc-head reserve-head">' +
         '<div class="reserve-kicker">First Nations land \u00b7 NRCan ALC</div>' +
         '<h3 style="font-size:1.35rem;line-height:1.25;margin:6px 0 8px;color:#fff;font-weight:700;">' + escapeHtml(r.name) + '</h3>' +
@@ -715,13 +979,14 @@
         '<div class="sub">' + escapeHtml(r.province || '') + ' \u00b7 ' + escapeHtml(r.typeLabel || r.type || 'IR') + '</div>' +
         badge +
       '</div>' +
+      solarTooltipBlock(siteSolar(r.lat, r.lng, state.season, null), null) +
       '<div class="tc-body">' +
         (ltdwa
           ? '<div class="why">Matched to ISC LTDWA community: <strong>' + escapeHtml(ltdwa.name) + '</strong>. Click the amber need pin for advisory details.</div>'
           : '<div class="why">Indian Reserve / FN land centroid. Not on the current ISC federal public-system LTDWA list (list changes; private wells &amp; territorial systems may still have advisories).</div>') +
         '<div class="fit">Nearby reserve density: <strong>' + (r.density != null ? r.density : '—') + '</strong> other reserves within 75 km (cluster proxy — not census population).</div>' +
-        '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA.</div>' +
-      '</div>';
+        '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA. Solar: offline GHI model \u2014 not a utility interconnection study.</div>' +
+      '</div>');
     positionTooltip(ev);
     tooltipEl.classList.add('visible');
   }
@@ -744,7 +1009,7 @@
 
     tooltipEl.classList.remove('reserve-card');
     tooltipEl.classList.add('need-card');
-    tooltipEl.innerHTML =
+    setTooltipHtml(
       '<div class="tc-head need-head">' +
         '<div class="need-kicker">NEED \u00b7 water access \u2014 not a high-yield site</div>' +
         '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
@@ -767,6 +1032,7 @@
         '<div class="systems"><strong>System(s):</strong><br/>' + systems + '</div>' +
         '<div class="why cold-caveat">' + escapeHtml(coldClimateCaveat(c)) + '</div>' +
         (c.note ? '<div class="fit">' + escapeHtml(c.note) + '</div>' : '') +
+        solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
           '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
@@ -775,9 +1041,9 @@
         '<div class="est-tag">' +
           'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC / FNHA') + '. ' +
           'List changes. Includes ISC long-term + short-term (south of 60 excl. BC) and FNHA BC advisories. ' +
-          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin.' +
+          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate \u00b7 ' + escapeHtml(state.season) + ' bin. Solar irradiance model \u2014 not a utility interconnection study.' +
         '</div>' +
-      '</div>';
+      '</div>');
     positionTooltip(ev);
     tooltipEl.classList.add('visible');
   }
