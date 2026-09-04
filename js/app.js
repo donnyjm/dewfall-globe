@@ -17,8 +17,12 @@
   const FN_BC_META = window.DEWFALL_FN_BC_META || {};
   const RESERVES = window.DEWFALL_FN_RESERVES || [];
   const RES_META = window.DEWFALL_FN_RESERVES_META || {};
-  const WORLD_RAW = window.DEWFALL_WORLD_WATER_NEED || window.WORLD_WATER_NEED || [];
-  const WORLD_META = window.DEWFALL_WORLD_WATER_NEED_META || {};
+  function getWorldRaw() {
+    return window.DEWFALL_WORLD_WATER_NEED || window.WORLD_WATER_NEED || [];
+  }
+  function getWorldMeta() {
+    return window.DEWFALL_WORLD_WATER_NEED_META || {};
+  }
 
   /** Merge need lists: long-term wins if same community; else short / BC. */
   function normNeedName(n) {
@@ -645,7 +649,7 @@
           ? ('Amber/red = long-term · Gold = short-term · BC via FNHA (' + bcN + ') · need ≠ high yield')
           : 'Silver = all IR (NRCan ALC) · need layer off';
         if (showWorld) {
-          noteTxt += ' · Magenta = world Indigenous/BWA (' + (WORLD_META.count || enrichedWorld.length || WORLD_RAW.length) + ')';
+          noteTxt += ' · Amber world need pins (' + (getWorldMeta().count || enrichedWorld.length || getWorldRaw().length) + ')';
         }
         note.textContent = noteTxt;
       }
@@ -684,7 +688,7 @@
   }
 
   function refreshWorld() {
-    enrichedWorld = WORLD_RAW.map((w) => {
+    enrichedWorld = getWorldRaw().map((w) => {
       const city = Object.assign({}, w, {
         climate: climateStubForLat(w.lat, w.lng),
         province: w.region || w.country,
@@ -990,6 +994,10 @@
 
   function applyLayers() {
     if (!globe) return;
+    // Rehydrate world pins if data arrived late or first paint raced
+    if (state.layers.world && !enrichedWorld.length && getWorldRaw().length) {
+      refreshWorld();
+    }
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
     const reserves = visibleReserves();
     const useReservePts = state.layers.reserves && reserves.length > 0;
@@ -1037,6 +1045,20 @@
     }
 
     // Tall beacon pillar for selected Water Need (Canada or world)
+    // World need sites as amber pillars (backup visibility + match need language)
+    if (state.layers.world && enrichedWorld.length) {
+      enrichedWorld.forEach(function (w) {
+        pts.push({
+          kind: 'world-need',
+          id: w.id,
+          lat: w.lat,
+          lng: w.lng,
+          yield: w.yield || { yieldMid: 8 },
+          _world: w,
+        });
+      });
+    }
+
     if (state.selectedKind === 'fn' && state.selectedId) {
       const sel = enrichedFn.find((x) => x.id === state.selectedId);
       if (sel) {
@@ -1078,11 +1100,13 @@
         .pointLng('lng')
         .pointAltitude((d) => {
           if (d.kind === 'need-beacon') return 0.28;
+          if (d.kind === 'world-need') return 0.045;
           if (d.kind === 'reserve') return 0.0025;
           return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
         })
         .pointRadius((d) => {
           if (d.kind === 'need-beacon') return 0.55;
+          if (d.kind === 'world-need') return 0.42;
           if (d.kind === 'reserve') {
             const dens = (d.density != null ? d.density : (d._res && d._res.density)) || 0;
             return reserveR * (1 + Math.min(0.35, dens / 140));
@@ -1091,6 +1115,7 @@
         })
         .pointColor((d) => {
           if (d.kind === 'need-beacon') return d.beaconColor || '#ffd24a';
+          if (d.kind === 'world-need') return '#f0a040';
           if (d.kind === 'reserve') {
             if (state.layers.solar) {
               const sol = d._solar || siteSolar(d.lat, d.lng, state.season, null);
@@ -1111,6 +1136,8 @@
           if (!d) return;
           if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
           else if (d.kind === 'need-beacon' && d._world) focusWorld(d._world.id);
+          else if (d.kind === 'world-need' && d._world) focusWorld(d._world.id);
+          else if (d.kind === 'world-need') focusWorld(d.id);
           else if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
           else if (d.kind === 'city' || d._city) focusCity(d.id || (d._city && d._city.id));
         });
@@ -1297,7 +1324,7 @@
       (c.issue || '') + ' ' + (c.notes || '') + ' ' + (c.advisoryType || '')
     );
     const el = document.createElement('div');
-    el.className = 'fn-pin world' + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
+    el.className = 'fn-pin world emphasis' + (isShort ? ' short' : '') + (isDnc ? ' dnc' : ' bwa') +
       (isSelected ? ' selected' : '');
     el.title = '';
     if (isSelected) {
@@ -1477,7 +1504,7 @@
     const term = escapeHtml(c.term === 'short' ? 'Short-term' : (c.term === 'chronic' || c.term === 'long' ? 'Chronic / long-term' : String(c.term || 'long')));
     const src = c.sourceUrl
       ? ('<a href="' + escapeHtml(c.sourceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(c.source || 'source') + '</a>')
-      : escapeHtml(c.source || WORLD_META.sourceLabel || 'curated list');
+      : escapeHtml(c.source || getWorldMeta().sourceLabel || 'curated list');
 
     tooltipEl.classList.remove('reserve-card');
     tooltipEl.classList.add('need-card', 'world-card');

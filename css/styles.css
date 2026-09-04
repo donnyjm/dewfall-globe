@@ -1448,9 +1448,15 @@ body.mobile-ui .fn-pin.selected .fn-pin-label-selected {
 }
 
 
-/* —— World need pins: same amber/gold language as Canadian need —— */
-.fn-pin.world {
-  /* visual = .bwa / .short / .dnc from Canada; world class is for list/search only */
+/* —— World need pins: same amber language as Canadian need, slightly louder at continent zoom —— */
+.fn-pin.world .fn-pin-dot {
+  width: 15px;
+  height: 15px;
+}
+.fn-pin.world.emphasis .fn-pin-dot {
+  width: 16px;
+  height: 16px;
+  animation: pinPulse 1.6s ease-in-out infinite;
 }
 .need-swatch.world {
   background: #f0a040;
