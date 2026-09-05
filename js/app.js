@@ -1709,7 +1709,7 @@
     setSiteParam(id);
     updateRankList();
     applyLayers();
-    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.8 }, 1200);
+    globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.9 }, 1200);
     showCityTooltip(c, { clientX: window.innerWidth / 2 + 40, clientY: window.innerHeight / 2 - 80 });
     bumpIdle();
   }
@@ -1730,7 +1730,7 @@
     if (rot) rot.checked = false;
     applyLayers();
     // Close enough that one pin fills attention (was too high — felt like a vague pan)
-    const alt = IS_MOBILE ? 0.28 : 0.32;
+    const alt = IS_MOBILE ? 0.24 : 0.28;
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     // Re-apply after camera settles so HTML pin + beacon render in the new frustum
     setTimeout(function () {
@@ -1760,7 +1760,7 @@
     const rot = document.getElementById('layer-rotate');
     if (rot) rot.checked = false;
     applyLayers();
-    const alt = /region|state|province|governorate/.test(c.scope || '') ? 1.1 : (IS_MOBILE ? 0.45 : 0.55);
+    const alt = /region|state|province|governorate/.test(c.scope || '') ? 0.9 : (IS_MOBILE ? 0.32 : 0.38);
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     setTimeout(function () {
       if(state.selectedId !== id) return;
@@ -1789,7 +1789,7 @@
     const rot = document.getElementById('layer-rotate');
     if (rot) rot.checked = false;
     applyLayers();
-    const alt = IS_MOBILE ? 0.28 : 0.32;
+    const alt = IS_MOBILE ? 0.24 : 0.28;
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     setTimeout(function () {
       if(state.selectedId !== id) return;
@@ -1809,10 +1809,16 @@
     if (!r || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'reserve';
+    setSiteParam(id);
+    state.autoRotate = false;
+    globe.controls().autoRotate = false;
+    const rot = document.getElementById('layer-rotate');
+    if (rot) rot.checked = false;
     applyLayers();
-    globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 0.55 }, 1400);
+    globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: IS_MOBILE ? 0.28 : 0.32 }, 1400);
     const tipEv = { clientX: window.innerWidth / 2, clientY: window.innerHeight * 0.55 };
     const show = function () {
+      if (state.selectedId !== id) return;
       if (r.hasLtdwa && r.ltdwaId && fnById[r.ltdwaId]) {
         const c = enrichedFn.find((x) => x.id === r.ltdwaId) || Y.enrichCity(fnById[r.ltdwaId], state.season);
         if (c && !c.needSignal) c.needSignal = needSignal(fnById[r.ltdwaId]);
@@ -1821,7 +1827,7 @@
         showReserveTooltip(r, tipEv);
       }
     };
-    if (IS_MOBILE) setTimeout(show, 500);
+    if (IS_MOBILE) setTimeout(show, 1450);
     else show();
     bumpIdle();
   }
