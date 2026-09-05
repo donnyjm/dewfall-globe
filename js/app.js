@@ -1979,7 +1979,7 @@
         ? (state.altitude > 1.1 ? 0.04 : 0.055)
         : (state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07));
       // Mobile: merge reserve-heavy point clouds for WebGL cost; desktop stays unmerged for crisp clicks.
-      const mergePts = IS_MOBILE && useReservePts && showReservesNow && state.altitude >= 1.05;
+      const mergePts = !window.matchMedia('(any-hover: hover)').matches && IS_MOBILE && useReservePts && showReservesNow && state.altitude >= 1.05;
       globe
         .pointsData(pts)
         .pointLat('lat')
@@ -2017,8 +2017,8 @@
           return Y.yieldColor(d.yield.yieldMid, maxY);
         })
         .pointsMerge(mergePts)
-        .pointLabel(() => '')
-        .onPointHover(IS_MOBILE ? function () {} : onPointHover)
+        .pointLabel(pointHoverLabel)
+        .onPointHover(onPointHover)
         .onPointClick((d) => {
           if (!d) return;
           if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
@@ -2300,6 +2300,13 @@
       openDrought(ev);
     }, { passive: false });
     return el;
+  }
+
+  function pointHoverLabel(d) {
+    if (!d || d.kind !== 'reserve') return '';
+    const reserve = d._res || d;
+    return '<span class="reserve-hover-name">' + escapeHtml(reserve.name || '') +
+      (reserve.province ? ' · ' + escapeHtml(reserve.province) : '') + '</span>';
   }
 
   function onPointHover(d) { document.body.style.cursor = d ? 'pointer' : 'default'; }
