@@ -1931,49 +1931,6 @@
       });
     }
 
-    if (state.selectedKind === 'fn' && state.selectedId) {
-      const sel = enrichedFn.find((x) => x.id === state.selectedId);
-      if (sel) {
-        pts.push({
-          kind: 'need-beacon',
-          id: 'beacon-' + sel.id,
-          lat: sel.lat,
-          lng: sel.lng,
-          yield: { yieldMid: 1 },
-          _fn: sel,
-          beaconColor: '#ffd24a',
-        });
-      }
-    }
-    if (state.selectedKind === 'world' && state.selectedId) {
-      const sel = enrichedWorld.find((x) => x.id === state.selectedId);
-      if (sel) {
-        pts.push({
-          kind: 'need-beacon',
-          id: 'beacon-world-' + sel.id,
-          lat: sel.lat,
-          lng: sel.lng,
-          yield: { yieldMid: 1 },
-          _world: sel,
-          beaconColor: '#ff6ad5',
-        });
-      }
-    }
-    if (state.selectedKind === 'drought' && state.selectedId) {
-      const sel = enrichedDrought.find((x) => x.id === state.selectedId);
-      if (sel) {
-        pts.push({
-          kind: 'need-beacon',
-          id: 'beacon-drought-' + sel.id,
-          lat: sel.lat,
-          lng: sel.lng,
-          yield: { yieldMid: 1 },
-          _drought: sel,
-          beaconColor: '#3ec8d4',
-        });
-      }
-    }
-
     if (pts.length) {
       const reserveR = IS_MOBILE
         ? (state.altitude > 1.1 ? 0.04 : 0.055)
@@ -2073,58 +2030,7 @@
         });
       });
     }
-    // Loud locator rings ONLY on the selected water-need site
-    if (state.layers.ltdwa && state.selectedKind === 'fn' && state.selectedId) {
-      const sel = enrichedFn.find((c) => c.id === state.selectedId);
-      if (sel) {
-        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
-          mist.push({
-            lat: sel.lat,
-            lng: sel.lng,
-            maxR: maxR,
-            propagationSpeed: 0.9 + i * 0.25,
-            repeatPeriod: 700 + i * 200,
-            color: function () {
-              return i === 0 ? 'rgba(255, 240, 140, 0.85)' : 'rgba(255, 180, 40, 0.55)';
-            },
-          });
-        });
-      }
-    }
-    if (state.layers.world && state.selectedKind === 'world' && state.selectedId) {
-      const sel = enrichedWorld.find((c) => c.id === state.selectedId);
-      if (sel) {
-        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
-          mist.push({
-            lat: sel.lat,
-            lng: sel.lng,
-            maxR: maxR,
-            propagationSpeed: 0.9 + i * 0.25,
-            repeatPeriod: 700 + i * 200,
-            color: function () {
-              return i === 0 ? 'rgba(255, 240, 140, 0.85)' : 'rgba(255, 180, 40, 0.55)';
-            },
-          });
-        });
-      }
-    }
-    if (state.layers.drought && state.selectedKind === 'drought' && state.selectedId) {
-      const sel = enrichedDrought.find((c) => c.id === state.selectedId);
-      if (sel) {
-        [1.2, 2.4, 3.8].forEach(function (maxR, i) {
-          mist.push({
-            lat: sel.lat,
-            lng: sel.lng,
-            maxR: maxR,
-            propagationSpeed: 0.9 + i * 0.25,
-            repeatPeriod: 700 + i * 200,
-            color: function () {
-              return i === 0 ? 'rgba(120, 240, 255, 0.85)' : 'rgba(62, 200, 212, 0.5)';
-            },
-          });
-        });
-      }
-    }
+    // Selection uses a compact, steady HTML marker.
     globe.ringsData(mist)
       .ringLat('lat').ringLng('lng')
       .ringMaxRadius('maxR')
@@ -2163,7 +2069,7 @@
     if (htmlItems.length) {
       globe.htmlElementsData(htmlItems)
         .htmlLat('lat').htmlLng('lng')
-        .htmlAltitude((d) => (d.selected ? 0.06 : 0.018))
+        .htmlAltitude(0.018)
         .htmlElement((d) => {
           if (d.kind === 'dp') {
             const el = document.createElement('div');
