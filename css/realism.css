@@ -70,11 +70,11 @@
 }
 
 /* Quiet map: reveal only the marker being inspected, including selected pins. */
-.fn-pin .fn-pin-label,.drought-pin .drought-pin-label{display:none!important;pointer-events:none}
+#globeViz .fn-pin .fn-pin-label,#globeViz .drought-pin .drought-pin-label{display:none!important;pointer-events:none}
 @media(hover:hover){
-  .fn-pin:hover .fn-pin-label,.drought-pin:hover .drought-pin-label{display:block!important;max-width:260px;white-space:normal;overflow:visible;text-overflow:clip}
+  #globeViz .fn-pin:hover .fn-pin-label,#globeViz .drought-pin:hover .drought-pin-label{display:block!important;max-width:260px;white-space:normal;overflow:visible;text-overflow:clip}
 }
-.fn-pin:focus-visible .fn-pin-label,.drought-pin:focus-visible .drought-pin-label{display:block!important;max-width:260px;white-space:normal}
+#globeViz .fn-pin:focus-visible .fn-pin-label,#globeViz .drought-pin:focus-visible .drought-pin-label{display:block!important;max-width:260px;white-space:normal}
 .label-help{font-size:12px;line-height:1.5;color:#b1c7d4;margin:0 0 12px}
 
 .rank-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
