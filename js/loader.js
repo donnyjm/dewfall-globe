@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var CACHE_BUST = 'mto0elqt';
+  var CACHE_BUST = 'mto0jpt5';
   function withBust(url) {
     if (!url || /^https?:/i.test(url)) return url;
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;

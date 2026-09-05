@@ -1988,7 +1988,8 @@
           if (d.kind === 'need-beacon') return 0.28;
           if (d.kind === 'world-need') return 0.045;
           if (d.kind === 'reserve') return 0.0025;
-          return 0.01 + (d.yield.yieldMid / maxY) * 0.22;
+          // Keep relative yield differences with a quieter, shorter silhouette.
+          return 0.005 + (d.yield.yieldMid / maxY) * 0.11;
         })
         .pointRadius((d) => {
           if (d.kind === 'need-beacon') return 0.55;
@@ -1997,7 +1998,7 @@
             const dens = (d.density != null ? d.density : (d._res && d._res.density)) || 0;
             return reserveR * (1 + Math.min(0.35, dens / 140));
           }
-          return 0.28 + (d.yield.yieldMid / maxY) * 0.55;
+          return 0.17 + (d.yield.yieldMid / maxY) * 0.33;
         })
         .pointColor((d) => {
           if (d.kind === 'need-beacon') return d.beaconColor || '#ffd24a';
