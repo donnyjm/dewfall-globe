@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var CACHE_BUST = '1788562800';
+  var CACHE_BUST = 'mtnzxuc7';
   function withBust(url) {
     if (!url || /^https?:/i.test(url)) return url;
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;
@@ -18,15 +18,16 @@
   var APP_SCRIPTS = [
     'data/cities.js',
     'js/yield.js',
-    { src: 'data/fn-ltdwa.js', optional: true },
-    { src: 'js/fn-ltdwa.js', optional: true },
-    { src: 'data/fn-short-term.js', optional: true },
-    { src: 'data/fn-bc-dwa.js', optional: true },
-    { src: 'data/fn-reserves.js', optional: true },
+    'data/fn-ltdwa.js',
+    'data/fn-short-term.js',
+    'data/fn-bc-dwa.js',
+    'data/fn-reserves.js',
     'data/world-water-need.js',
     'data/drought-markets.js',
-    { src: 'data/funders.js', optional: true },
-    { src: 'data/site-socio.js', optional: true },
+    'data/funders.js',
+    'data/site-socio.js',
+    { src: 'js/journey.js', optional: true },
+    { src: 'js/observatory.js', optional: true },
     'js/app.js'
   ];
 
@@ -57,22 +58,41 @@
       detail.className = 'loader-detail';
       inner.appendChild(detail);
     }
-    detail.textContent = 'Three.js / globe.gl failed to load. Check vendor/ or network.';
+    detail.textContent = 'The Earth or a required dataset could not load. Please retry.';
   }
 
-  function loadScript(src) {
+  function loadScript(src, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var el = document.createElement('script');
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        el.onload = el.onerror = null;
+        el.remove();
+        reject(new Error('Timed out loading ' + src));
+      }, timeoutMs || 20000);
+      function finish(error) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        el.onload = el.onerror = null;
+        if (error) reject(error);
+        else resolve(src);
+      }
       el.src = withBust(src);
       el.async = false;
-      el.onload = function () { resolve(src); };
-      el.onerror = function () { reject(new Error('Failed to load ' + src)); };
+      el.onload = function () { finish(); };
+      el.onerror = function () { finish(new Error('Failed to load ' + src)); };
       document.head.appendChild(el);
     });
   }
 
   function loadOptional(src) {
-    return loadScript(src).catch(function () { return null; });
+    return loadScript(src, 8000).catch(function (err) {
+      console.warn('[DEWFALL] optional enhancement unavailable', err);
+      return null;
+    });
   }
 
   function loadWithFallback(localSrc, cdnSrc, label) {
@@ -84,7 +104,7 @@
   }
 
   function globeReady() {
-    return typeof window.Globe === 'function' || typeof window.Globe === 'object';
+    return typeof window.Globe === 'function';
   }
 
   function loadAppChain(list, i) {
@@ -92,6 +112,7 @@
     var item = list[i];
     var src = typeof item === 'string' ? item : item.src;
     var optional = typeof item === 'object' && item.optional;
+    setLoaderMessage('LOADING RECORDS · ' + Math.round((i / list.length) * 100) + '%');
     var next = function () { return loadAppChain(list, i + 1); };
     if (optional) return loadOptional(src).then(next);
     return loadScript(src).then(next);

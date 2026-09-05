@@ -3,13 +3,12 @@
  *
  * Calibrated to first-principles envelope work (not bench measurements):
  *   ~22 °C / 60 % RH  →  ~6–9 L/day  (honest jug / design bin)
- *   ~30 °C / 80 % RH  →  ~15–18 L/day (Caribbean-class humid)
- * Design target band: ~10–20 L/day residential.
+ *   ~30 °C / 80 % RH  →  unvalidated warm-humid scenario
+ * Scenario: 400 W cooling, 5°C coil; range is 300–500 W sensitivity.
  *
  * Architecture modeled:
  *   - Refrigeration core (R290): primary condensation when dew point is workable
- *   - Regenerating sorbent + Tier-5 TEC cassettes: assist in drier/hot air,
- *     gated by local AI on dew point, temps, airflow, available solar energy
+ *   - No unvalidated sorption or TEC contribution is credited
  *
  * Solar (GHI / untapped TEC-branch harvest): offline lat/lng empirical model —
  * NOT a utility interconnection study. See estimateSiteSolar().
@@ -181,48 +180,20 @@
     const AH = absHumidityGm3(T, rh);
     const solar = solarFactor(lat || 0, season || 'annual');
 
-    // —— Refrigeration core (R290) ——
-    // Works when coil can get below dew point with usable ΔT.
-    // Roughly zero below ~4 °C dew point; rises with Tdp and warm dry-bulb.
-    let fridge = 0;
-    if (Tdp > 4 && T > 5) {
-      // Moisture driving force
-      const moisture = Math.max(0, Tdp - 4);
-      // Warm air improves throughput / COP window
-      const warm = 0.75 + 0.02 * Math.max(0, Math.min(T, 35) - 12);
-      // RH helps film / collection
-      const rhFac = 0.55 + 0.45 * rh;
-      fridge = moisture * 0.78 * warm * rhFac;
-      // Soft cap when AH is huge (Caribbean) — matches ~15–18 L class
-      fridge = fridge * (1 - 0.15 / (1 + AH / 12));
-    }
-    // Freeze / cold lockout derate
-    if (T < 8) fridge *= Math.max(0.15, (T + 2) / 10);
-
-    // —— Sorbent + Tier-5 TEC assist ——
-    // Helps in drier / hot conditions where fridge alone is weak.
-    // Solar-gated (dedicated solar branch for TEC cassettes).
-    let tec = 0;
-    const dryStress = Math.max(0, 0.55 - rh) / 0.55; // 0 moist → 1 very dry
-    const hotBonus = Math.max(0, T - 22) / 20;
-    if (AH > 3 && T > 10) {
-      // Absolute humidity still needed as feedstock
-      const feed = Math.min(1, AH / 10);
-      tec = (1.8 + 3.5 * dryStress + 1.2 * hotBonus) * feed * (0.45 + 0.55 * solar);
-      // When fridge already strong, TEC contributes less (AI gates cassettes)
-      const gate = 1 / (1 + fridge / 10);
-      tec *= 0.55 + 0.45 * gate;
-    }
-
-    let total = fridge + tec;
-    // Residential design envelope soft caps (model, not measured)
-    total = Math.min(20, Math.max(0, total));
-
-    // Present as a range (±18%) to reflect model uncertainty
-    let lo = Math.max(0, +(total * 0.82).toFixed(1));
-    let hi = Math.min(22, +(total * 1.18).toFixed(1));
-    if (hi < lo) { const m = +total.toFixed(1); lo = m; hi = m; }
-    if (total < 0.5) { lo = 0; hi = Math.max(hi, 0.5); }
+    // Same E1 psychrometric scenario as the evidence atlas. Cooling is not electrical draw.
+    const pressure = 101325;
+    const pv = rh * psatPa(T);
+    const inlet = 0.62198 * pv / (pressure - pv);
+    const coilPv = psatPa(5);
+    const outlet = 0.62198 * coilPv / (pressure - coilPv);
+    const latent = Math.max(0, inlet - outlet) * 2450;
+    const sensible = Math.max(0, T - 5) * 1.02;
+    const fraction = T > 5 && latent > 0 ? latent / (latent + sensible) : 0;
+    const fridge = fraction * 400 * 86.4 / 2450;
+    const tec = 0; // Unvalidated development branches receive no production credit.
+    const total = fridge;
+    const lo = +(total * 0.75).toFixed(1);
+    const hi = +(total * 1.25).toFixed(1);
 
     // Qualitative score
     let score, scoreLabel, why;
@@ -231,28 +202,28 @@
       why = 'High dew point and absolute humidity favor the R290 refrigeration core; warm air supports strong condensation throughput.';
     } else if (total >= 10) {
       score = 4; scoreLabel = 'Strong';
-      why = 'Good moisture availability. Refrigeration core does most of the work; TEC branch may idle.';
+      why = 'Good moisture availability in the 400 W cooling scenario.';
     } else if (total >= 6.0) {
       score = 3; scoreLabel = 'Moderate';
       why = 'Workable dew points. Yield near the warm-humid design bin (~6–9 L/day model).';
     } else if (total >= 3.5) {
       score = 2; scoreLabel = 'Limited';
-      why = 'Lower absolute humidity. Sorbent/TEC cassettes and solar availability matter more than fridge alone.';
+      why = 'Lower absolute humidity limits the refrigeration scenario. Sorption and TEC output are unvalidated.';
     } else {
       score = 1; scoreLabel = 'Challenging';
-      why = 'Dry or cold air limits condensation. Tier-5 TEC + sorbent can still produce water at lower efficiency where solar is strong (e.g. US Southwest drought markets).';
+      why = 'Dry or cold air limits condensation. No arid-mode production is credited before validation.';
     }
 
     // Market narrative
     let marketFit = '';
     if (rh < 0.45 && T > 20) {
-      marketFit = 'US Southwest–style: drought demand is high; model leans on sorbent/TEC + solar, not fridge peak yield.';
+      marketFit = 'Drought demand may be high, but dry air limits condensation. Sorbent/TEC output is not credited.';
     } else if (Tdp >= 18 && rh >= 0.65) {
       marketFit = 'Coastal-humid peak: highest modeled L/day from refrigeration-core condensation.';
     } else if (T < 12) {
       marketFit = 'Cool/temperate: fridge derated by low ambient; seasonal summer improves yield.';
     } else {
-      marketFit = 'Mixed climate: both fridge and TEC paths contribute depending on season and solar.';
+      marketFit = 'Mixed climate: seasonal conditions affect the refrigeration scenario.';
     }
 
     return {

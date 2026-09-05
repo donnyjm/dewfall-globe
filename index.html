@@ -9,8 +9,11 @@
   <meta name="theme-color" content="#050a12" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <meta name="description" content="DEWFALL Alpha — estimated atmospheric water yield by climate, all Canadian First Nations reserves (NRCan), plus ISC/FNHA water-need layer (long + short, nationwide). Model estimates only. Mekilok, North Vancouver." />
-  <title>DEWFALL · Where water falls from air</title>
-  <link rel="stylesheet" href="css/styles.css?v=1788562800" />
+  <title>DEWFALL · Earth & Water Atlas</title>
+  <link rel="stylesheet" href="css/styles.css?v=mtnzxuc7" />
+<link rel="stylesheet" href="css/observatory.css?v=mtnzxuc7" />
+  <link rel="stylesheet" href="css/realism.css?v=mtnzxuc7" />
+  <meta name="dewfall-release" content="mtnzxuc7" />
 </head>
 <body>
   <div id="loader" class="loader" aria-live="polite">
@@ -22,24 +25,23 @@
 
   <div id="globeViz" role="img" aria-label="Interactive 3D Earth globe showing DEWFALL estimated water yield, First Nations reserves across Canada, and LTDWA need sites"></div>
 
-  <div id="sheet-backdrop" class="sheet-backdrop" hidden aria-hidden="true"></div>
+<div id="sheet-backdrop" class="sheet-backdrop" hidden aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">DF</div>
       <div class="brand-text">
-        <h1>DEWFALL</h1>
-        <p>Mekilok · North Vancouver · Alpha AWG</p>
+        <h1>DEWFALL<span class="brand-edition"> / GLOBE</span></h1>
+        <p>MEKILOK ECOSYSTEM · NORTH VANCOUVER</p>
       </div>
     </div>
     <button type="button" class="search-launch" id="btn-search" aria-expanded="false" aria-controls="panel-search" title="Search locations">
       <span class="search-launch-icon" aria-hidden="true">⌕</span>
       <span>Search</span>
     </button>
+    <button id="desktop-layers" class="layers-launch" aria-expanded="false" aria-controls="panel-controls">Layers</button>
     <div class="disclaimer-banner" id="disclaimer-banner">
-      <strong>Model estimates only.</strong>
-      Yields are climate-based projections — not measured.
-      Machine incomplete. Design target ~10–20 L/day residential.
+      <span class="model-indicator"></span><strong>MODEL ESTIMATES</strong><span>Not measured output</span>
       <button type="button" class="banner-dismiss" id="disclaimer-dismiss" aria-label="Dismiss disclaimer">×</button>
     </div>
   </header>
@@ -66,7 +68,7 @@
       <button type="button" class="sheet-close" id="close-layers" aria-label="Close layers">×</button>
     </div>
     <div class="ctrl-group">
-      <label class="group-label">Season climate bin</label>
+      <label class="group-label">Season climate bin · source proxy</label>
       <div class="seg" role="group">
         <button type="button" data-season="annual">Annual</button>
         <button type="button" data-season="summer" class="active">Summer</button>
@@ -75,6 +77,7 @@
     </div>
     <div class="ctrl-group">
       <label class="group-label">Layers</label>
+      <p class="label-help">Hover a marker for its name. Tap for details.</p>
       <div class="toggle-row">
         <label class="toggle"><input type="checkbox" id="layer-yield" checked /> Estimated yield</label>
         <label class="toggle"><input type="checkbox" id="layer-humidity" /> Humidity mist</label>
@@ -135,8 +138,7 @@
     <p class="search-hint" id="search-hint">Type to find markets, water-need sites, reserves, or yield cities.</p>
   </aside>
 
-  <aside class="panel rank-panel" id="panel-rank" aria-label="Rankings">
-    <div class="sheet-handle" aria-hidden="true"></div>
+  <aside class="panel rank-panel" id="panel-rank" aria-label="Rankings"><div class="sheet-handle" aria-hidden="true"></div>
     <header>
       <div class="sheet-head sheet-head-inline">
         <div class="rank-tabs" role="tablist">
@@ -164,7 +166,7 @@
   <aside class="panel product-strip">
     <div class="title">Product context</div>
     <strong>DEWFALL Alpha</strong> — modular solar-ready residential AWG.
-    R290 refrigeration core + regenerating sorbent; Tier 5 = six TEC cassettes on dedicated solar, AI-gated by dew point, temps, airflow, energy.
+    R290 refrigeration core; sorption and four production TEC cassettes plus a separate chilled-mirror TEC remain development paths. No added yield is credited here.
     <em>Teal market pins</em> = drought / arid commercial beachheads · <em>coastal humid</em> = high yield.
     <em>FN reserves</em> = NRCan Aboriginal Lands (IR). <em>Water need</em> = ISC long-term + short-term DWAs + FNHA BC (often cold → lower model L/day).
     <div class="attr">Data: NRCan ALC · ISC LTDWA Aug 2026 · ISC short-term Sep 2026 · FNHA DWA Aug 2026</div>
@@ -175,7 +177,33 @@
     <div class="tooltip-body" id="tooltip-body"></div>
   </div>
 
-  <script src="js/updater.js?v=1788562800"></script>
-  <script src="js/loader.js?v=1788562800"></script>
+  <nav class="orbital-controls" aria-label="Globe view controls">
+    <div class="view-cluster"><button id="view-rotate" aria-label="Pause rotation" aria-pressed="true">Ⅱ</button><button id="view-zoom-in" aria-label="Zoom in">+</button><button id="view-zoom-out" aria-label="Zoom out">−</button><button id="view-home" aria-label="Reset globe view">⌂</button></div>
+    <button id="view-journey" class="journey-launch">✦ Journey</button><button id="view-light" aria-pressed="false">☀ Daylight</button><button id="view-present" aria-pressed="false">↗ Present</button>
+  </nav>
+  <section id="journey-card" aria-label="Guided Earth journey" hidden>
+    <div class="journey-top"><span id="journey-step"></span><button id="journey-exit" aria-label="Exit journey">×</button></div>
+    <h2 id="journey-title"></h2><p id="journey-copy"></p>
+    <div id="journey-reading"></div>
+    <div class="journey-nav"><button id="journey-prev" aria-label="Previous location">←</button><button id="journey-inspect">Explore this location</button><button id="journey-next" aria-label="Next location">→</button></div>
+    <small>Climate scenarios · not measured production</small>
+  </section>
+  <div class="orbital-readout"><span id="coordinate-readout">30.0° N / 100.0° W</span><span id="orbital-status">ORBITAL LIGHTING · ILLUSTRATIVE</span></div>
+  <div class="evidence-footer"><span id="dataset-counts">Loading source records</span><button id="view-method">Sources &amp; model notes ↗</button></div>
+  <div class="mobile-model-note">Model estimates · not measured output</div>
+  <dialog id="method-dialog" class="method-dialog" aria-labelledby="method-title">
+    <button id="close-method" class="method-close" aria-label="Close model notes">×</button>
+    <span class="method-eyebrow">THE EVIDENCE BEHIND THE ATLAS</span><h2 id="method-title">Explore with context.</h2>
+    <p>DEWFALL has not yet produced validated, measured yield data. This atlas screens possibilities; it cannot establish a location’s actual output or suitability.</p>
+    <h3>Climate and yield</h3><p>The E1 screening scenario assumes 400 W cooling, a 5°C coil and sea-level pressure. This is not the calibrated digital twin. City inputs are approximate curated climate bins; many community and market inputs are rough latitude-based proxies. “Summer” and “Winter” follow the source dataset’s seasonal conventions, which are not consistently aligned between hemispheres. These are not live weather or exact-site forecasts.</p>
+    <p>The displayed range varies cooling from 300–500 W. It is <strong>a sensitivity range, not a confidence interval</strong>. No unvalidated sorbent or TEC contribution is credited. A geometric mean combines a heuristic need score with modeled yield for the fit ranking. Commercial-market scores use a separate demand proxy.</p>
+    <h3>Places and water need</h3><p>Land records come from NRCan Aboriginal Lands of Canada centroids. Canadian need layers carry dated ISC and FNHA snapshots from August–September 2026. World sites retain the original curated citations and approximate community coordinates. A marker does not establish a current advisory, community consent or willingness to buy. Check each linked source and engage through a Nation-led process.</p>
+    <h3>Solar, population and funding</h3><p>Solar is a latitude-based irradiance approximation with a 0.6 kWp array and 0.75 performance ratio assumption. Population and income are estimates or regional proxies. Funders are research starting points; eligibility, application windows and support have not been verified.</p>
+    <h3>Earth and source files</h3><p>NASA Blue Marble imagery and Earth night/ocean textures distributed with three-globe. Day/night illumination is illustrative, not a real-time solar position. Source records were imported on 4 September 2026.</p>
+    <div class="method-links"><a href="https://github.com/donnyjm/dewfall-globe" target="_blank" rel="noopener">Original globe &amp; datasets ↗</a><a href="data/WORLD_WATER_NEED_SOURCES.md" target="_blank" rel="noopener">World-need source register ↗</a><a href="https://github.com/vasturiano/three-globe/tree/master/example/img" target="_blank" rel="noopener">Earth texture collection ↗</a><a href="js/yield.js?v=mtnzxuc7" target="_blank" rel="noopener">Transparent yield model ↗</a></div>
+    <p class="method-final">Sharing only creates a local card or copied link. No outreach is sent.</p>
+  </dialog>
+  <script src="js/updater.js?v=mtnzxuc7"></script>
+  <script src="js/loader.js?v=mtnzxuc7"></script>
 </body>
 </html>

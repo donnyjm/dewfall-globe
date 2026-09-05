@@ -1,62 +1,53 @@
-/**
- * DEWFALL Globe — auto-update for phones/desktops on GitHub Pages.
- * Polls version.json; when the deploy changes, reloads once so Safari
- * picks up new JS/CSS without a manual hard-refresh.
- */
+/** Each open page checks its own loaded version, across phone and desktop. */
 (function () {
   'use strict';
-  var KEY = 'dewfall-globe-version';
-  var POLL_MS = 20000;
+  var marker = document.querySelector('meta[name="dewfall-release"]');
+  var loadedVersion = marker ? marker.content : null;
   var checking = false;
-
-  function getStored() {
-    try { return localStorage.getItem(KEY); } catch (e) { return null; }
-  }
-  function setStored(v) {
-    try { localStorage.setItem(KEY, v); } catch (e) {}
-  }
+  var updating = false;
 
   function check() {
-    if (checking) return;
+    if (checking || updating || document.visibilityState === 'hidden' || navigator.onLine === false) return;
     checking = true;
-    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        checking = false;
-        if (!data || !data.v) return;
-        var prev = getStored();
-        if (!prev) {
-          setStored(data.v);
-          return;
-        }
-        if (prev !== data.v) {
-          setStored(data.v);
-          // Soft banner then reload — avoids surprise mid-tap when possible
-          var bar = document.getElementById('update-banner');
-          if (!bar) {
-            bar = document.createElement('div');
-            bar.id = 'update-banner';
-            bar.setAttribute('role', 'status');
-            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));background:#1a4a58;color:#e8f8ff;font:650 14px/1.3 system-ui,sans-serif;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.4);';
-            bar.textContent = 'New DEWFALL Globe version — updating…';
-            document.body.appendChild(bar);
-          }
-          setTimeout(function () {
-            location.reload();
-          }, 600);
-        }
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 8000);
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store', signal: controller.signal })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(async function (data) {
+        if (!data || typeof data.v !== 'string' || !/^[a-zA-Z0-9._-]{1,100}$/.test(data.v)) return;
+        if (!loadedVersion) { loadedVersion = data.v; return; }
+        if (loadedVersion === data.v) return;
+        // A release manifest can reach an edge cache before its HTML. Do not
+        // replace a working globe until that exact document is available.
+        var nextUrl = new URL(location.href);
+        nextUrl.searchParams.set('release', data.v);
+        var page = await fetch(nextUrl.toString(), { cache: 'no-store', signal: controller.signal });
+        if (!page.ok) return;
+        var html = await page.text();
+        var documentVersion = html.match(/<meta\s+name=["']dewfall-release["']\s+content=["']([^"']+)["']/i);
+        if (!documentVersion || documentVersion[1] !== data.v) return;
+        if (document.visibilityState === 'hidden' || navigator.onLine === false) return;
+        updating = true;
+        var bar = document.createElement('div');
+        bar.id = 'update-banner';
+        bar.setAttribute('role', 'status');
+        bar.style.cssText = 'position:fixed;inset:0 0 auto;z-index:100000;padding:14px 20px;padding-top:max(14px,env(safe-area-inset-top));background:#124957;color:#efffff;font:600 14px/1.4 system-ui;text-align:center;box-shadow:0 8px 25px #0005';
+        bar.textContent = 'A new DEWFALL Globe is ready. Updating…';
+        document.body.appendChild(bar);
+        setTimeout(function () {
+          var url = new URL(location.href);
+          url.searchParams.set('release', data.v);
+          // Keep site selection and force Safari to fetch the new HTML document.
+          location.replace(url.toString());
+        }, 1200);
       })
-      .catch(function () { checking = false; });
+      .catch(function () { /* Keep the current globe usable when offline. */ })
+      .finally(function () { clearTimeout(timeout); checking = false; });
   }
-
-  // First paint: record current version without reload
   check();
-  setInterval(check, POLL_MS);
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') check();
-  });
+  setInterval(check, 20000);
+  document.addEventListener('visibilitychange', check);
   window.addEventListener('focus', check);
-  window.addEventListener('pageshow', function (ev) {
-    if (ev.persisted) check();
-  });
+  window.addEventListener('online', check);
+  window.addEventListener('pageshow', check);
 })();

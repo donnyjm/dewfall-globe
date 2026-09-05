@@ -97,7 +97,7 @@
     const ua = navigator.userAgent || '';
     return /iPhone|iPad|iPod|Android|Mobile/i.test(ua);
   }
-  const IS_MOBILE = detectMobile();
+  let IS_MOBILE = detectMobile();
 
   const REMOTE_WEIGHT = {
     'remote-northern': 3.0,
@@ -489,7 +489,7 @@
     const limit = 40;
 
     // Water-need communities first
-    for (let i = 0; i < enrichedFn.length && out.length < limit; i++) {
+    for (let i = 0; i < enrichedFn.length; i++) {
       const c = enrichedFn[i];
       if (haystackMatch(q, [c.name, c.altNames, c.province, c.region, c.remoteness])) {
         out.push({
@@ -503,7 +503,7 @@
     }
 
     // World Indigenous / BWA need
-    for (let i = 0; i < enrichedWorld.length && out.length < limit; i++) {
+    for (let i = 0; i < enrichedWorld.length; i++) {
       const c = enrichedWorld[i];
       if (haystackMatch(q, [c.name, c.people, c.country, c.region, c.issue, c.notes, c.kindIssue])) {
         out.push({
@@ -517,7 +517,7 @@
     }
 
     // Drought / arid commercial markets
-    for (let i = 0; i < enrichedDrought.length && out.length < limit; i++) {
+    for (let i = 0; i < enrichedDrought.length; i++) {
       const c = enrichedDrought[i];
       if (haystackMatch(q, [c.name, c.country, c.region, c.drought, c.why, c.yieldHint, 'drought', 'market', 'arid'])) {
         out.push({
@@ -531,7 +531,7 @@
     }
 
     // Yield cities
-    for (let i = 0; i < enriched.length && out.length < limit; i++) {
+    for (let i = 0; i < enriched.length; i++) {
       const c = enriched[i];
       if (haystackMatch(q, [c.name, c.region, c.market, c.note])) {
         out.push({
@@ -546,7 +546,7 @@
 
     // Reserves (large set — stop early)
     const reserves = RESERVES || [];
-    for (let i = 0; i < reserves.length && out.length < limit; i++) {
+    for (let i = 0; i < reserves.length; i++) {
       const r = reserves[i];
       if (haystackMatch(q, [r.name, r.alt, r.province, r.typeLabel, r.type])) {
         out.push({
@@ -559,6 +559,7 @@
       }
     }
 
+    out.forEach(function (r) { if (normSearch(r.name) === q) r.score = -1; });
     out.sort(function (a, b) {
       if (a.score !== b.score) return a.score - b.score;
       return a.name.localeCompare(b.name);
@@ -582,7 +583,7 @@
       if (hint) hint.textContent = 'Try another spelling, province code, or alt name.';
       return;
     }
-    if (hint) hint.textContent = results.length + ' result' + (results.length === 1 ? '' : 's');
+    if (hint) hint.textContent = (results.length === 40 ? 'Top 40 matches' : results.length + ' result' + (results.length === 1 ? '' : 's'));
     const badge = { need: 'Need', world: 'World', drought: 'Market', reserve: 'Reserve', city: 'City' };
     box.innerHTML = results.map(function (r) {
       return '<button type="button" class="search-result" role="option" data-kind="' + r.kind + '" data-id="' + escapeHtml(r.id) + '">' +
@@ -646,8 +647,16 @@
       searchInput.addEventListener('keydown', function (ev) {
         if (ev.key === 'Escape') {
           closeSheets();
+        } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          const rows = Array.from(document.querySelectorAll('#search-results .search-result'));
+          if (!rows.length) return;
+          const current = rows.findIndex(el => el.classList.contains('search-focused'));
+          const next = current < 0 ? (ev.key === 'ArrowDown' ? 0 : rows.length - 1) : (current + (ev.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+          rows.forEach((el,i) => {el.classList.toggle('search-focused',i === next);el.setAttribute('aria-selected',String(i === next));});
+          rows[next].scrollIntoView({block:'nearest'});
         } else if (ev.key === 'Enter') {
-          const first = document.querySelector('#search-results .search-result');
+          const first = document.querySelector('#search-results .search-result.search-focused') || document.querySelector('#search-results .search-result');
           if (first) {
             ev.preventDefault();
             selectSearchResult(first.dataset.kind, first.dataset.id);
@@ -776,7 +785,7 @@
     // needSignal Canada often homes*weight ~ 10–500; world ~50–110
     const need01 = Math.max(0, Math.min(1, Math.log10(need + 1) / Math.log10(401))); // 0..~1 at 400
     const yMid = (c.yield && c.yield.yieldMid != null) ? +c.yield.yieldMid : 0;
-    // Design band ~10–20 L/day; 0 L = 0 suitability; 12+ L = strong
+    // Screening suitability; 0 L = 0 suitability; 12+ L = strong
     const yield01 = Math.max(0, Math.min(1, yMid / 14));
     const fit01 = Math.sqrt(need01 * yield01); // geometric mean
     const score = Math.round(fit01 * 100);
@@ -1133,7 +1142,7 @@
     if (/donnyjm\.github\.io/i.test(location.hostname)) {
       base = 'https://donnyjm.github.io/dewfall-globe/';
     } else {
-      base = location.origin + location.pathname;
+      base = window.parent !== window ? window.parent.location.origin + window.parent.location.pathname : location.origin + location.pathname;
     }
     try {
       const u = new URL(base, location.href);
@@ -1155,6 +1164,7 @@
       else url.searchParams.delete('site');
       const next = url.pathname + url.search + (url.hash || '');
       history.replaceState(null, '', next);
+      if (window.parent !== window) { const outer=new URL(window.parent.location.href); if(id) outer.searchParams.set('site',id); else outer.searchParams.delete('site'); window.parent.history.replaceState(null,'',outer.pathname+outer.search); }
     } catch (e) {}
   }
 
@@ -1167,6 +1177,15 @@
 
   function siteCardText(c) {
     const y = c.yield || {};
+    if (CITIES.some(x => x.id === c.id)) return [
+      'DEWFALL climate card — ' + c.name,
+      c.region || '',
+      'Modeled yield (' + state.season + '): ' + y.yieldLo + '–' + y.yieldHi + ' L/day',
+      'Climate: ' + y.T + '°C / ' + y.RH + '% RH; dew point ' + y.Tdp + '°C',
+      '400 W cooling scenario; range varies cooling 300–500 W. Not a confidence interval or measured production.',
+      'Climate bin, not live weather. Sorption/TEC production is not credited.',
+      sitePermalink(c.id)
+    ].join('\n');
     const sol = c.solar || solarForEntity(c);
     const srcUrl = c.sourceUrl ? (' ' + c.sourceUrl) : '';
     const untapped = sol && sol.untappedKWhYear != null ? formatKWh(sol.untappedKWhYear) : '—';
@@ -1231,11 +1250,11 @@
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {
-        fallbackCopy(text); done();
+        if (fallbackCopy(text)) done(); else if(btn) btn.textContent='Copy unavailable';
       });
     } else {
-      fallbackCopy(text);
-      done();
+      if (fallbackCopy(text)) done();
+      else if (btn) btn.textContent = 'Copy unavailable';
     }
   }
 
@@ -1248,10 +1267,12 @@
       ta.style.left = '-9999px';
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      const copied = document.execCommand('copy');
       document.body.removeChild(ta);
+      return copied;
     } catch (e) {
       console.warn('[DEWFALL] copy failed', e);
+      return false;
     }
   }
 
@@ -1259,6 +1280,7 @@
     return '<div class="share-row">' +
       '<button type="button" class="share-btn" data-share="link">Copy link</button>' +
       '<button type="button" class="share-btn" data-share="text">Copy card</button>' +
+      '<button type="button" class="share-btn" data-share="png">Save PNG</button>' +
       '</div>';
   }
 
@@ -1272,6 +1294,7 @@
         const mode = btn.dataset.share;
         if (mode === 'link') copyText(sitePermalink(c.id), btn);
         else if (mode === 'text') copyText(siteCardText(c), btn);
+        else if (mode === 'png' && window.exportDewfallCard) window.exportDewfallCard(c, btn);
       });
     });
   }
@@ -1416,6 +1439,12 @@
     updateRankList();
     updateLtdwaBanner();
     applyLayers();
+    if (tooltipEl && tooltipEl.classList.contains('visible')) {
+      const group = state.selectedKind === 'city' ? enriched : state.selectedKind === 'fn' ? enrichedFn : state.selectedKind === 'world' ? enrichedWorld : enrichedDrought;
+      const current = group.find(c => c.id === state.selectedId);
+      const render = {city:showCityTooltip,fn:showFnTooltip,world:showWorldTooltip,drought:showDroughtTooltip}[state.selectedKind];
+      if (current && render) render(current);
+    }
   }
 
   function updateStats() {
@@ -1458,8 +1487,8 @@
     setText('#stat-avg', avg.toFixed(1) + ' L');
     setText('#stat-top', top ? top.name.split(',')[0] : '\u2014');
     setText('#stat-high', String(highCount));
-    setText('#stat-peak-lbl', 'Peak est.');
-    setText('#stat-avg-lbl', 'Avg est.');
+    setText('#stat-peak-lbl', 'Peak model / day');
+    setText('#stat-avg-lbl', 'Mean model / day');
     setText('#stat-top-lbl', 'Top city');
     setText('#stat-high-lbl', '≥10 L cities');
   }
@@ -1597,7 +1626,7 @@
           '</div></div>';
       }).join('');
     } else {
-      if (title) title.textContent = 'Where DEWFALL produces most';
+      if (title) title.textContent = 'Highest modeled yield';
       if (sub) sub.textContent = 'Ranked by modeled L/day \u00b7 click to fly';
       const sorted = enriched.slice().sort((a, b) => b.yield.yieldMid - a.yield.yieldMid);
       list.innerHTML = sorted.map((c, i) => {
@@ -1626,6 +1655,7 @@
     if (!c || !globe) return;
     state.selectedId = id;
     state.selectedKind = 'city';
+    setSiteParam(id);
     updateRankList();
     applyLayers();
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: 1.8 }, 1200);
@@ -1653,6 +1683,7 @@
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     // Re-apply after camera settles so HTML pin + beacon render in the new frustum
     setTimeout(function () {
+      if(state.selectedId !== id) return;
       state.altitude = alt;
       state.closeZoom = true;
       applyLayers();
@@ -1681,6 +1712,7 @@
     const alt = IS_MOBILE ? 0.28 : 0.32;
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     setTimeout(function () {
+      if(state.selectedId !== id) return;
       state.altitude = alt;
       state.closeZoom = true;
       applyLayers();
@@ -1709,6 +1741,7 @@
     const alt = IS_MOBILE ? 0.28 : 0.32;
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     setTimeout(function () {
+      if(state.selectedId !== id) return;
       state.altitude = alt;
       state.closeZoom = true;
       applyLayers();
@@ -2088,15 +2121,8 @@
       globe.htmlElementsData([]);
     }
 
-    const hq = enriched.find((c) => c.id === 'north-vancouver');
-    if (hq) {
-      globe.labelsData([hq])
-        .labelLat('lat').labelLng('lng')
-        .labelText(() => 'DEWFALL HQ')
-        .labelSize(0.45).labelDotRadius(0.35)
-        .labelColor(() => 'rgba(62,200,212,0.95)')
-        .labelAltitude(0.02).labelResolution(2);
-    }
+    // Location names appear on hover, not as permanent globe labels.
+    globe.labelsData([]);
   }
 
   function makeFnPin(c) {
@@ -2113,18 +2139,16 @@
     if (isSelected) {
       const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
-        escapeHtml(shortName(c.name)) + fitBit + '</span>';
+        escapeHtml(c.name) + fitBit + '</span>';
     } else {
-      el.innerHTML = '<span class="fn-pin-dot"></span>';
+      el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label">' + escapeHtml(c.name) + '</span>';
     }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
-        showFnTooltip(c, ev);
         document.body.style.cursor = 'pointer';
         bumpIdle();
       });
       el.addEventListener('mouseleave', () => {
-        hideTooltip();
         document.body.style.cursor = 'default';
       });
     }
@@ -2157,19 +2181,17 @@
     if (isSelected) {
       const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="fn-pin-beacon"></span><span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-selected">' +
-        escapeHtml(shortName(c.name)) + fitBit + '</span>';
+        escapeHtml(c.name) + fitBit + '</span>';
     } else {
       el.innerHTML = '<span class="fn-pin-dot"></span><span class="fn-pin-label fn-pin-label-always">' +
-        escapeHtml(shortName(c.name)) + '</span>';
+        escapeHtml(c.name) + '</span>';
     }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
-        showWorldTooltip(c, ev);
         document.body.style.cursor = 'pointer';
         bumpIdle();
       });
       el.addEventListener('mouseleave', () => {
-        hideTooltip();
         document.body.style.cursor = 'default';
       });
     }
@@ -2196,19 +2218,17 @@
     if (isSelected) {
       const fitBit = (c.fit && c.fit.score != null) ? (' · ' + c.fit.score) : '';
       el.innerHTML = '<span class="drought-pin-beacon"></span><span class="drought-pin-diamond"></span><span class="drought-pin-label drought-pin-label-selected">' +
-        escapeHtml(shortName(c.name)) + fitBit + '</span>';
+        escapeHtml(c.name) + fitBit + '</span>';
     } else {
       el.innerHTML = '<span class="drought-pin-diamond"></span><span class="drought-pin-label drought-pin-label-always">' +
-        escapeHtml(shortName(c.name)) + '</span>';
+        escapeHtml(c.name) + '</span>';
     }
     if (!IS_MOBILE) {
       el.addEventListener('mouseenter', (ev) => {
-        showDroughtTooltip(c, ev);
         document.body.style.cursor = 'pointer';
         bumpIdle();
       });
       el.addEventListener('mouseleave', () => {
-        hideTooltip();
         document.body.style.cursor = 'default';
       });
     }
@@ -2226,20 +2246,7 @@
     return el;
   }
 
-  function onPointHover(d, ev) {
-    if (d) {
-      if (d.kind === 'reserve') {
-        showReserveTooltip(d._res || d, ev);
-      } else {
-        showCityTooltip(d._city || d, ev);
-      }
-      document.body.style.cursor = 'pointer';
-    } else {
-      hideTooltip();
-      document.body.style.cursor = 'default';
-    }
-    bumpIdle();
-  }
+  function onPointHover(d) { document.body.style.cursor = d ? 'pointer' : 'default'; }
 
   function tooltipContentEl() {
     return document.getElementById('tooltip-body') || tooltipEl;
@@ -2273,11 +2280,12 @@
         '<div class="fit">' + escapeHtml(y.marketFit) + '</div>' +
         '<div class="tc-breakdown">' +
           '<span>Fridge core: <strong>' + y.fridge + ' L</strong></span>' +
-          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>not credited</strong></span>' +
           '<span>Solar factor: <strong>' + y.solar + '</strong></span>' +
         '</div>' +
-        '<div class="est-tag">MODEL ESTIMATE \u2014 not measured. Machine incomplete. Climate normals \u00b7 ' + escapeHtml(state.season) + ' season bin. Irradiance model \u2014 not a utility interconnection study.</div>' +
-      '</div>');
+        '<div class="est-tag">MODEL ESTIMATE \u2014 not measured. Machine incomplete. Climate normals \u00b7 ' + escapeHtml(state.season) + ' season bin. Irradiance model \u2014 not a site energy assessment.</div>' +
+      shareRowHtml() + '</div>');
+    wireShareButtons(c);
     pinTooltip(ev);
   }
 
@@ -2287,8 +2295,8 @@
     // names/info only via hover tooltip / mobile sheet
     const ltdwa = r.hasLtdwa && r.ltdwaId ? fnById[r.ltdwaId] : null;
     const badge = ltdwa
-      ? '<span class="badge ltdwa-link">On active water-need list</span>'
-      : '<span class="badge reserve-badge">No active advisory on current need list</span>';
+      ? '<span class="badge ltdwa-link">Matched in the dated need dataset</span>'
+      : '<span class="badge reserve-badge">No match in this dated need dataset</span>';
     setTooltipHtml(
       '<div class="tc-head reserve-head">' +
         '<div class="reserve-kicker">First Nations land \u00b7 NRCan ALC</div>' +
@@ -2301,9 +2309,9 @@
       '<div class="tc-body">' +
         (ltdwa
           ? '<div class="why">Matched to ISC LTDWA community: <strong>' + escapeHtml(ltdwa.name) + '</strong>. Click the amber need pin for advisory details.</div>'
-          : '<div class="why">Indian Reserve / FN land centroid. Not on the current ISC federal public-system LTDWA list (list changes; private wells &amp; territorial systems may still have advisories).</div>') +
+          : '<div class="why">Indian Reserve / FN land centroid. No match in the supplied dated water-need dataset. This does not establish current advisory status; private wells and territorial systems may be outside its coverage.</div>') +
         '<div class="fit">Nearby reserve density: <strong>' + (r.density != null ? r.density : '—') + '</strong> other reserves within 75 km (cluster proxy — not census population).</div>' +
-        '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA. Solar: offline GHI model \u2014 not a utility interconnection study.</div>' +
+        '<div class="est-tag">Source: NRCan Aboriginal Lands of Canada Legislative Boundaries. Pin = polygon centroid (largest part). Attribution: NRCan + ISC LTDWA. Solar: offline GHI model \u2014 not a site energy assessment.</div>' +
       '</div>');
     pinTooltip(ev);
   }
@@ -2361,13 +2369,13 @@
         solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
-          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>not credited</strong></span>' +
           '<span>Need signal: <strong>' + Math.round(c.needSignal) + '</strong></span>' +
         '</div>' +
         '<div class="est-tag">' +
           'Source: ' + escapeHtml(c.source || FN_META.sourceLabel || 'ISC / FNHA') + '. ' +
           'List changes. Includes ISC long-term + short-term (south of 60 excl. BC) and FNHA BC advisories. ' +
-          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate · ' + escapeHtml(state.season) + ' bin. Solar irradiance model — not a utility interconnection study.' +
+          'Not all private wells or territorial systems. Reserve geometry: NRCan ALC. Model estimate · ' + escapeHtml(state.season) + ' bin. Solar irradiance model — not a site energy assessment.' +
         '</div>' +
         shareRowHtml() +
       '</div>');
@@ -2404,8 +2412,8 @@
         socioCellsHtml(socio) +
         '<div class="tc-cell"><div class="k">People / group</div><div class="v">' + people + '</div></div>' +
         '<div class="tc-cell"><div class="k">Issue</div><div class="v">' + issue + '</div></div>' +
-        '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
-          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
+        '<div class="tc-cell span2"><div class="k">Estimated yield · rough latitude climate proxy</div><div class="v big need-yield">' +
+          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate proxy)</span></div></div>' +
         '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
         '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
       '</div>' +
@@ -2417,7 +2425,7 @@
         '<div class="why cold-caveat">Climate inputs are lat-band stubs (not weather-station normals). Yield is a model estimate only — this pin marks documented water NEED.</div>' +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
-          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>not credited</strong></span>' +
           '<span>Need signal: <strong>' + Math.round(c.needSignal) + '</strong></span>' +
         '</div>' +
         '<div class="est-tag">' +
@@ -2455,10 +2463,10 @@
       '<div class="tc-grid">' +
         fitScoreCellHtml(fit) +
         socioCellsHtml(socio) +
-        '<div class="tc-cell"><div class="k">Yield hint</div><div class="v">' + escapeHtml(c.yieldHint || '—') + '</div></div>' +
+        '<div class="tc-cell"><div class="k">Modeled climate suitability</div><div class="v">' + escapeHtml(y.scoreLabel) + '</div></div>' +
         '<div class="tc-cell"><div class="k">Market note</div><div class="v">' + escapeHtml(c.populationNote || 'metro') + '</div></div>' +
-        '<div class="tc-cell span2"><div class="k">Estimated DEWFALL under lat-band climate stub</div><div class="v big need-yield">' +
-          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate stub)</span></div></div>' +
+        '<div class="tc-cell span2"><div class="k">Estimated yield · rough latitude climate proxy</div><div class="v big need-yield">' +
+          y.yieldLo + ' – ' + y.yieldHi + ' L/day <span class="model-only">(model · climate proxy)</span></div></div>' +
         '<div class="tc-cell"><div class="k">Dry-bulb / RH</div><div class="v">' + y.T + ' °C · ' + y.RH + '%</div></div>' +
         '<div class="tc-cell"><div class="k">Dew point</div><div class="v">' + y.Tdp + ' °C</div></div>' +
       '</div>' +
@@ -2470,7 +2478,7 @@
         solarTooltipBlock(c.solar || solarForEntity(c), y.solar) +
         '<div class="tc-breakdown">' +
           '<span>Fridge: <strong>' + y.fridge + ' L</strong></span>' +
-          '<span>TEC/sorbent: <strong>' + y.tec + ' L</strong></span>' +
+          '<span>TEC/sorbent: <strong>not credited</strong></span>' +
           '<span>Commercial fit: <strong>' + fit.score + '</strong></span>' +
         '</div>' +
         '<div class="est-tag">' +
@@ -2505,6 +2513,20 @@
   }
 
   function pinTooltip(ev) {
+    const selected = enriched.concat(enrichedFn,enrichedWorld,enrichedDrought).find(c => c.id === state.selectedId);
+    const root = tooltipContentEl();
+    if (selected && selected.climate && !root.querySelector('.season-comparison')) {
+      const section = document.createElement('section');
+      section.className = 'season-comparison';
+      section.setAttribute('aria-label','Seasonal yield comparison');
+      section.innerHTML = '<h4>Across the seasons <span>modeled L/day</span></h4><div class="season-cells">' +
+        ['annual','summer','winter'].map(season => {
+          const y = Y.enrichCity(selected,season).yield;
+          return '<div class="' + (state.season === season ? 'current' : '') + '"><span>' + season + '</span><strong>' + y.yieldMid.toFixed(1) + '</strong><small>' + y.T + '°C · ' + y.RH + '% RH</small></div>';
+        }).join('') + '</div><p>Same 400 W cooling scenario. Source seasonal bins; approximate climate, not a forecast.</p>';
+      const grid = root.querySelector('.tc-grid');
+      if (grid) grid.insertAdjacentElement('afterend',section);
+    }
     positionTooltip(ev);
     state.tooltipPinned = !!IS_MOBILE;
     if (IS_MOBILE) {
@@ -2586,15 +2608,29 @@
     const earthTopo = base + "earth-topology.png";
     const sky = base + "night-sky.png";
 
-    globe = Globe()(el)
+    globe = Globe({ rendererConfig: { antialias: true, preserveDrawingBuffer: true } })(el)
       .globeImageUrl(earthDay)
       .bumpImageUrl(earthTopo)
       .backgroundImageUrl(sky)
       .showAtmosphere(true)
-      .atmosphereColor("#4ec8e8")
-      .atmosphereAltitude(0.18);
+      .atmosphereColor("#6598dd")
+      .atmosphereAltitude(0.035);
 
+    // Low relief and restrained blue limb preserve the satellite texture.
+    const material = globe.globeMaterial();
+    material.bumpScale = 0.32;
+    material.shininess = 9;
+    material.specular.set('#192b3a');
+    // The vendored globe.gl exposes scene(), but not the newer lights() API.
+    // Retain its built-in lighting; the optional orbital shader controls its own light.
     const resize = () => {
+      const mobileNow = detectMobile();
+      if (mobileNow !== IS_MOBILE) {
+        IS_MOBILE = mobileNow;
+        document.body.classList.toggle('mobile-ui', IS_MOBILE);
+        closeSheets();
+        hideTooltip();
+      }
       globe.width(window.innerWidth);
       globe.height(window.innerHeight);
     };
@@ -2612,8 +2648,10 @@
     }
 
     const ctrl = globe.controls();
-    ctrl.autoRotate = true;
-    ctrl.autoRotateSpeed = IS_MOBILE ? 0.22 : 0.45;
+    ctrl.autoRotate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    state.autoRotate = ctrl.autoRotate;
+    $('#layer-rotate').checked = ctrl.autoRotate;
+    ctrl.autoRotateSpeed = IS_MOBILE ? 0.10 : 0.16;
     ctrl.enableDamping = true;
     ctrl.minDistance = 120;
     ctrl.maxDistance = 800;
@@ -2630,12 +2668,19 @@
     el.addEventListener("touchstart", bumpIdle, { passive: true });
 
     // Prefer Canada framing a bit closer on phones so taps matter sooner
-    const startAlt = IS_MOBILE ? 2.05 : 1.9;
-    globe.pointOfView({ lat: 52, lng: -92, altitude: startAlt }, 0);
+    const startAlt = IS_MOBILE ? 1.85 : 1.65;
+    globe.pointOfView({ lat: 26, lng: -90, altitude: startAlt }, 0);
     state.altitude = startAlt;
     state.closeZoom = false;
     if (IS_MOBILE) document.body.classList.remove('mobile-close-zoom');
     refresh();
+    // Optional presentation controls must never stop the data explorer from opening.
+    try {
+      if (window.initObservatory) window.initObservatory({ globe, clear: () => { hideTooltip(); closeSheets(); }, season: () => state.season, permalink: sitePermalink, counts: {cities:CITIES.length,reserves:RESERVES.length,world:getWorldRaw().length,markets:getDroughtRaw().length} });
+    } catch (error) { console.warn('[DEWFALL] Optional presentation unavailable', error); }
+    globe.renderer().domElement.addEventListener('webglcontextlost', function (event) {
+      event.preventDefault(); showBootError('GRAPHICS INTERRUPTED — RETRY TO RESTORE EARTH');
+    });
 
     setTimeout(() => {
       const loader = $("#loader");
