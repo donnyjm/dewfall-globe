@@ -98,6 +98,7 @@
     return /iPhone|iPad|iPod|Android|Mobile/i.test(ua);
   }
   let IS_MOBILE = detectMobile();
+  const COUNTRY_WATER = window.DEWFALL_COUNTRY_WATER || [];
 
   const REMOTE_WEIGHT = {
     'remote-northern': 3.0,
@@ -116,11 +117,13 @@
       otherFn: false,
       ltdwa: true,
       world: true,
+      countries: false,
       drought: true,
       northern: false,
       solar: false,
     },
     filter: 'all',
+    worldCause: 'all',
     autoRotate: true,
     selectedId: null,
     selectedKind: null,
@@ -313,6 +316,8 @@
       });
     }
 
+    $('#layer-countries').addEventListener('change', function () { state.layers.countries = this.checked; applyLayers(); });
+    $('#world-cause').addEventListener('change', function () { state.worldCause = this.value; updateRankList(); applyLayers(); });
     const rot = $('#layer-rotate');
     if (rot) {
       rot.checked = !!state.autoRotate;
@@ -559,6 +564,9 @@
       }
     }
 
+    COUNTRY_WATER.forEach(function(c) {
+      if (haystackMatch(q,[c.name,c.iso3,c.region])) out.push({kind:'country',id:c.id,name:c.name,meta:'National water-access estimates · '+c.region,score:2});
+    });
     out.forEach(function (r) { if (normSearch(r.name) === q) r.score = -1; });
     out.sort(function (a, b) {
       if (a.score !== b.score) return a.score - b.score;
@@ -584,7 +592,7 @@
       return;
     }
     if (hint) hint.textContent = (results.length === 40 ? 'Top 40 matches' : results.length + ' result' + (results.length === 1 ? '' : 's'));
-    const badge = { need: 'Need', world: 'World', drought: 'Market', reserve: 'Reserve', city: 'City' };
+    const badge = { need: 'Need', world: 'World', drought: 'Market', reserve: 'Reserve', city: 'City', country: 'Country' };
     box.innerHTML = results.map(function (r) {
       return '<button type="button" class="search-result" role="option" data-kind="' + r.kind + '" data-id="' + escapeHtml(r.id) + '">' +
         '<span class="search-badge ' + r.kind + '">' + badge[r.kind] + '</span>' +
@@ -602,7 +610,8 @@
 
   function selectSearchResult(kind, id) {
     closeSheets();
-    if (kind === 'need') focusFn(id);
+    if (kind === 'country') focusCountry(id);
+    else if (kind === 'need') focusFn(id);
     else if (kind === 'world') focusWorld(id);
     else if (kind === 'drought') focusDrought(id);
     else if (kind === 'reserve') focusReserve(id);
@@ -1324,6 +1333,7 @@
   function applySiteDeepLink() {
     const site = parseSiteParam();
     if (!site || !globe) return false;
+    if (COUNTRY_WATER.some(c=>c.id===site)) { focusCountry(site); return true; }
     if (enrichedFn.some(function (x) { return x.id === site; })) {
       focusFn(site);
       return true;
@@ -1403,7 +1413,7 @@
         note: w.notes,
         source: w.source,
         sourceUrl: w.sourceUrl,
-        term: w.term === 'short' ? 'short' : 'long',
+        term: w.term || 'reported',
         world: true,
         people: w.people,
         country: w.country,
@@ -1440,9 +1450,9 @@
     updateLtdwaBanner();
     applyLayers();
     if (tooltipEl && tooltipEl.classList.contains('visible')) {
-      const group = state.selectedKind === 'city' ? enriched : state.selectedKind === 'fn' ? enrichedFn : state.selectedKind === 'world' ? enrichedWorld : enrichedDrought;
+      const group = state.selectedKind === 'country' ? COUNTRY_WATER : state.selectedKind === 'city' ? enriched : state.selectedKind === 'fn' ? enrichedFn : state.selectedKind === 'world' ? enrichedWorld : enrichedDrought;
       const current = group.find(c => c.id === state.selectedId);
-      const render = {city:showCityTooltip,fn:showFnTooltip,world:showWorldTooltip,drought:showDroughtTooltip}[state.selectedKind];
+      const render = {country:showCountryTooltip,city:showCityTooltip,fn:showFnTooltip,world:showWorldTooltip,drought:showDroughtTooltip}[state.selectedKind];
       if (current && render) render(current);
     }
   }
@@ -1534,7 +1544,13 @@
     const title = $('#rank-title');
     const sub = $('#rank-sub');
 
-    if (state.rankMode === 'markets') {
+    $('#world-cause-filter').hidden = state.rankMode !== 'world';
+    if (state.rankMode === 'countries') {
+      title.textContent = 'Worldwide water access';
+      sub.textContent = '217 countries / economies · national estimates, not local advisories';
+      const rows=COUNTRY_WATER.slice().sort((a,b)=>(a.basic?a.basic.percent:101)-(b.basic?b.basic.percent:101));
+      list.innerHTML=rows.map((c,i)=>'<div class="rank-item" data-id="'+c.id+'" data-kind="country"><div class="num">'+(i+1)+'</div><div><div class="city-name">'+escapeHtml(c.name)+'</div><div class="city-meta">National · '+(c.basic?c.basic.year:'no data')+'</div></div><div class="yld">'+(c.basic?escapeHtml(formatGap(c.basic.percent)):'—')+'<span>without basic water</span></div></div>').join('');
+    } else if (state.rankMode === 'markets') {
       if (title) title.textContent = 'Drought / arid markets';
       if (sub) sub.textContent = 'Commercial first beachheads · sorted by tier then modeled yield';
       const rows = enrichedDrought.slice().sort(function (a, b) {
@@ -1581,9 +1597,9 @@
           '</div></div>';
       }).join('');
     } else if (state.rankMode === 'world') {
-      if (title) title.textContent = 'World Indigenous / BWA need';
-      if (sub) sub.textContent = 'Curated documented sites · not exhaustive';
-      const rows = enrichedWorld.slice().sort((a, b) => b.needSignal - a.needSignal);
+      if (title) title.textContent = 'World water need';
+      if (sub) sub.textContent = 'Dated reports · not live advisories · '+enrichedWorld.length+' records';
+      const rows = filteredWorld().slice().sort((a, b) => (b.year||0)-(a.year||0) || b.needSignal-a.needSignal);
       list.innerHTML = rows.map((c, i) => {
         const y = c.yield;
         const fit = c.fit;
@@ -1642,12 +1658,47 @@
     list.querySelectorAll('.rank-item').forEach((el) => {
       el.addEventListener('click', () => {
         if (IS_MOBILE) closeSheets();
-        if (el.dataset.kind === 'fn') focusFn(el.dataset.id);
+        if (el.dataset.kind === 'country') focusCountry(el.dataset.id);
+        else if (el.dataset.kind === 'fn') focusFn(el.dataset.id);
         else if (el.dataset.kind === 'world') focusWorld(el.dataset.id);
         else if (el.dataset.kind === 'drought') focusDrought(el.dataset.id);
         else focusCity(el.dataset.id);
       });
     });
+  }
+
+  function formatGap(percent) {
+    const gap=Math.max(0,100-percent);
+    return gap>0 && gap<0.1 ? '<0.1%' : gap.toFixed(1)+'%';
+  }
+
+  function showCountryTooltip(c, ev) {
+    tooltipEl.classList.remove('reserve-card','need-card','world-card','drought-card');
+    function cell(label,record){return '<div class="tc-cell span2"><div class="k">'+label+'</div><div class="v big">'+(record?escapeHtml(formatGap(record.percent)):'No data')+'</div><div class="sub">'+(record?'National estimate · '+record.year:'No published value in the imported 2020–2025 series')+'</div></div>';}
+    setTooltipHtml('<div class="tc-head"><div class="need-kicker">COUNTRY CONTEXT · WHO / UNICEF JMP</div><h3>'+escapeHtml(c.name)+'</h3><div class="sub">'+escapeHtml(c.region)+'</div></div><div class="tc-grid">'+cell('Population without at least basic drinking water',c.basic)+cell('Population without safely managed drinking water',c.safe)+'</div><div class="tc-body"><p>These are national service estimates. They do not show which households lack water, and do not establish a local shortage, conflict or drinking-water advisory.</p><p><strong>Basic:</strong> improved source within a 30-minute round trip. <strong>Safely managed:</strong> improved source on premises, available when needed and free from priority contamination. These measures overlap; do not add them.</p><p>'+escapeHtml(c.markerLocation?'Map reference: '+c.markerLocation+' (World Bank country metadata). This is not a crisis pin for that city.':'No map reference supplied; this country remains available in the list and search.')+'</p><p>No site yield or fit is calculated from national water-access statistics.</p><div class="est-tag">Source: '+escapeHtml(c.source)+' · imported 2026-09-04.<br><a target="_blank" rel="noopener" href="'+escapeHtml(c.sourceUrl)+'">Basic-water source ↗</a> · <a target="_blank" rel="noopener" href="'+escapeHtml(c.safeSourceUrl)+'">Safely-managed source ↗</a> · <a target="_blank" href="data/global-water-sources.html">Coverage and source register ↗</a></div><div class="share-row"><button id="country-copy" type="button">Copy link</button></div></div>');
+    document.getElementById('country-copy').onclick=function(){copyText(sitePermalink(c.id),this);};
+    pinTooltip(ev || {clientX:innerWidth/2,clientY:innerHeight/3});
+  }
+
+  function focusCountry(id) {
+    const c=COUNTRY_WATER.find(c=>c.id===id);
+    if(!c||!globe)return;
+    closeSheets();state.selectedId=id;state.selectedKind='country';setSiteParam(id);
+    state.layers.countries=true;$('#layer-countries').checked=true;
+    state.autoRotate=false;globe.controls().autoRotate=false;$('#layer-rotate').checked=false;
+    updateRankList();applyLayers();
+    if(Number.isFinite(c.lat)&&Number.isFinite(c.lng))globe.pointOfView({lat:c.lat,lng:c.lng,altitude:1.7},1200);
+    showCountryTooltip(c);
+  }
+
+  function makeCountryPin(c) {
+    const el=document.createElement('button');el.type='button';el.className='country-pin';
+    el.setAttribute('aria-label',c.name+' — national water-access context');
+    const gap=c.basic?100-c.basic.percent:null;
+    el.style.setProperty('--country-colour',gap===null?'#8292a4':gap>=25?'#e1a4ff':gap>=5?'#ba9ae9':'#8a91bd');
+    el.innerHTML='<span class="country-dot"></span><span class="country-name">'+escapeHtml(c.name)+' · national context</span>';
+    el.onclick=function(e){e.stopPropagation();focusCountry(c.id);};
+    return el;
   }
 
   function focusCity(id) {
@@ -1709,7 +1760,7 @@
     const rot = document.getElementById('layer-rotate');
     if (rot) rot.checked = false;
     applyLayers();
-    const alt = IS_MOBILE ? 0.28 : 0.32;
+    const alt = /region|state|province|governorate/.test(c.scope || '') ? 1.1 : (IS_MOBILE ? 0.45 : 0.55);
     globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: alt }, 1400);
     setTimeout(function () {
       if(state.selectedId !== id) return;
@@ -1798,10 +1849,11 @@
     return rows;
   }
 
+  function filteredWorld() { return enrichedWorld.filter(c => state.worldCause === 'all' || (state.worldCause === 'community' ? !c.cause : c.cause === state.worldCause)); }
   function visibleWorld() {
     if (!state.layers.world) return [];
-    if (state.filter === 'highfit') return enrichedWorld.filter(passesHighFit);
-    return enrichedWorld;
+    if (state.filter === 'highfit') return filteredWorld().filter(passesHighFit);
+    return filteredWorld();
   }
 
   function visibleDrought() {
@@ -2102,6 +2154,8 @@
       });
     }
 
+    if (state.layers.countries) COUNTRY_WATER.filter(c=>Number.isFinite(c.lat)&&Number.isFinite(c.lng)).forEach(c=>htmlItems.push({kind:'country',lat:c.lat,lng:c.lng,city:c}));
+
     if (htmlItems.length) {
       globe.htmlElementsData(htmlItems)
         .htmlLat('lat').htmlLng('lng')
@@ -2113,6 +2167,7 @@
             el.textContent = 'Tdp ' + d.city.yield.Tdp + '\u00b0C';
             return el;
           }
+          if (d.kind === 'country') return makeCountryPin(d.city);
           if (d.kind === 'world') return makeWorldPin(d.city);
           if (d.kind === 'drought') return makeDroughtPin(d.city);
           return makeFnPin(d.city);
@@ -2388,7 +2443,7 @@
     const fit = c.fit || fitScoreFor(c);
     if (!c.fit) c.fit = fit;
     const socio = socioFor(c);
-    const funders = fundersForSite(c);
+    const funders = c.cause ? [] : fundersForSite(c);
     const people = c.people ? escapeHtml(c.people) : '—';
     const region = [c.country, c.region].filter(Boolean).map(escapeHtml).join(' · ');
     const issue = escapeHtml(c.issue || 'documented water access gap');
@@ -2401,9 +2456,10 @@
     tooltipEl.classList.add('need-card', 'world-card');
     setTooltipHtml(
       '<div class="tc-head need-head">' +
-        '<div class="need-kicker">WORLD NEED · fit = need × climate yield (model)</div>' +
+        '<div class="need-kicker">WORLD WATER NEED · DOCUMENTED SNAPSHOT</div>' +
         '<h3 style="font-size:1.3rem;line-height:1.25;margin:6px 0 8px;color:#fff;">' + escapeHtml(c.name) + '</h3>' +
         '<div class="sub">' + region + '</div>' +
+        '<div class="evidence-context">Source period: '+escapeHtml(c.evidenceDate || c.year || 'not recorded')+' · '+escapeHtml(c.scope || 'community / site')+'<br>Current local status is not verified. '+escapeHtml(c.coordinateNote || 'Approximate place reference.')+'</div>' +
         '<span class="badge world-badge">World</span> ' +
         '<span class="badge long-badge">' + term + '</span>' +
       '</div>' +

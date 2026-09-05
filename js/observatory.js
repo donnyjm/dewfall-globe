@@ -91,8 +91,8 @@
     rankContext.className='rank-context'; rankContext.setAttribute('aria-live','polite');
     document.querySelector('#panel-rank header').appendChild(rankContext);
     const annotate = () => {
-      rankContext.textContent=document.querySelectorAll('#rank-list .rank-item').length+' locations · '+api.season()+' climate bin';
-      document.querySelectorAll('.rank-item,.search-result,.fn-pin,.drought-pin').forEach(el=>{el.tabIndex=0;if(el.tagName!=='BUTTON')el.setAttribute('role','button');if(!el.dataset.keyboardReady){el.dataset.keyboardReady='1';el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});}});
+      rankContext.textContent=document.querySelectorAll('#rank-list .rank-item').length+(document.querySelector('.rank-tab.active')?.dataset.rank==='countries'?' countries / economies · national data':' locations · '+api.season()+' climate bin');
+      document.querySelectorAll('.rank-item,.search-result,.fn-pin,.drought-pin,.country-pin').forEach(el=>{el.tabIndex=0;if(el.tagName!=='BUTTON')el.setAttribute('role','button');if(!el.dataset.keyboardReady){el.dataset.keyboardReady='1';el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});}});
       document.querySelectorAll('.rank-tab').forEach(el=>el.setAttribute('aria-selected',String(el.classList.contains('active'))));
     };
     const observer=new MutationObserver(annotate);observer.observe(document.getElementById('rank-list'),{childList:true});observer.observe(document.getElementById('search-results'),{childList:true});annotate();

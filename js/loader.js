@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var CACHE_BUST = 'mtnzxuc7';
+  var CACHE_BUST = 'mto0bqx0';
   function withBust(url) {
     if (!url || /^https?:/i.test(url)) return url;
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + CACHE_BUST;
@@ -23,6 +23,8 @@
     'data/fn-bc-dwa.js',
     'data/fn-reserves.js',
     'data/world-water-need.js',
+    'data/water-crises.js',
+    'data/global-water-coverage.js',
     'data/drought-markets.js',
     'data/funders.js',
     'data/site-socio.js',
