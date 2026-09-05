@@ -1873,8 +1873,8 @@
     const maxY = Math.max.apply(null, enriched.map((c) => c.yield.yieldMid).concat([1]));
     const reserves = visibleReserves();
     const useReservePts = state.layers.reserves && reserves.length > 0;
-    // Mobile: at altitude > 1.3 hide individual reserves (keep yield + need); show all when zoomed in.
-    const showReservesNow = !IS_MOBILE || state.altitude < 1.3;
+    // Keep every reserve available at every zoom level.
+    const showReservesNow = true;
 
     const pts = [];
     if (state.layers.yield && enriched.length) {
@@ -1894,11 +1894,11 @@
     }
     if (useReservePts && showReservesNow) {
       // Skip reserves that already have a larger LTDWA pin to reduce clutter
-      let idx = 0;
+
       reserves.forEach((r) => {
         if (r.hasLtdwa && state.layers.ltdwa) return;
-        // Far-ish mobile zoom: subsample every 2nd until very close (altitude already gated)
-        if (IS_MOBILE && state.altitude >= 1.05 && (idx++ % 2) === 1) return;
+
+
         pts.push({
           kind: 'reserve',
           id: r.id,
@@ -1978,9 +1978,10 @@
       const reserveR = IS_MOBILE
         ? (state.altitude > 1.1 ? 0.04 : 0.055)
         : (state.altitude > 2.2 ? 0.045 : (state.altitude > 1.5 ? 0.055 : 0.07));
-      // Mobile: merge reserve-heavy point clouds for WebGL cost; desktop stays unmerged for crisp clicks.
-      const mergePts = !window.matchMedia('(any-hover: hover)').matches && IS_MOBILE && useReservePts && showReservesNow && state.altitude >= 1.05;
+      // Individual meshes preserve interaction for every reserve.
+      const mergePts = false;
       globe
+        .onGlobeClick((coords, ev) => { if (IS_MOBILE) pickNearbyReserves(coords, ev); })
         .pointsData(pts)
         .pointLat('lat')
         .pointLng('lng')
@@ -2019,14 +2020,16 @@
         .pointsMerge(mergePts)
         .pointLabel(pointHoverLabel)
         .onPointHover(onPointHover)
-        .onPointClick((d) => {
+        .onPointClick((d, ev) => {
           if (!d) return;
           if (d.kind === 'need-beacon' && d._fn) focusFn(d._fn.id);
           else if (d.kind === 'need-beacon' && d._world) focusWorld(d._world.id);
           else if (d.kind === 'need-beacon' && d._drought) focusDrought(d._drought.id);
           else if (d.kind === 'world-need' && d._world) focusWorld(d._world.id);
           else if (d.kind === 'world-need') focusWorld(d.id);
-          else if (d.kind === 'reserve' || d._res) focusReserve(d.id || (d._res && d._res.id));
+          else if (d.kind === 'reserve' || d._res) {
+            if (!IS_MOBILE || !pickNearbyReserves(d, ev)) focusReserve(d.id || (d._res && d._res.id));
+          }
           else if (d.kind === 'city' || d._city) focusCity(d.id || (d._city && d._city.id));
         });
     } else {
@@ -2300,6 +2303,28 @@
       openDrought(ev);
     }, { passive: false });
     return el;
+  }
+
+  function pickNearbyReserves(coords, ev) {
+    if (!state.layers.reserves || !ev || !Number.isFinite(ev.clientX)) return false;
+    const rect = document.getElementById('globeViz').getBoundingClientRect();
+    const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    const nearby = visibleReserves().filter(r => !(r.hasLtdwa && state.layers.ltdwa))
+      .filter(r => Math.abs(r.lat - coords.lat) < 25 && Math.abs(((r.lng - coords.lng + 540) % 360) - 180) < 60)
+      .map(r => { const p = globe.getScreenCoords(r.lat, r.lng, 0.0025); return {r, distance:Math.hypot(p.x-x,p.y-y)}; })
+      .filter(p => p.distance <= 28).sort((a,b) => a.distance-b.distance);
+    if (!nearby.length) return false;
+    if (nearby.length === 1) { focusReserve(nearby[0].r.id); return true; }
+    globe.controls().autoRotate = false;
+    setTooltipHtml('<div class="tc-head"><h3>Choose a community</h3><div class="sub">' + nearby.length +
+      ' locations near your tap</div></div><div class="reserve-tap-options">' + nearby.map(({r}) =>
+      '<button type="button" data-reserve-choice="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) +
+      '<small>' + escapeHtml(r.province || '') + '</small></button>').join('') + '</div>');
+    tooltipContentEl().querySelectorAll('[data-reserve-choice]').forEach(button => {
+      button.onclick = () => focusReserve(button.dataset.reserveChoice);
+    });
+    pinTooltip(ev);
+    return true;
   }
 
   function pointHoverLabel(d) {

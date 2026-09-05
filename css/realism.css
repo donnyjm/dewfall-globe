@@ -100,3 +100,5 @@
 }
 
 .reserve-hover-name{display:block;padding:4px 7px;border:1px solid #6a9dab;background:#081a28ed;color:#f1f8fb;border-radius:5px;font:550 11px/1.3 system-ui;max-width:210px;white-space:normal;pointer-events:none}
+
+.reserve-tap-options{display:grid;gap:6px;padding:12px 18px 28px;max-height:45vh;overflow:auto}.reserve-tap-options button{min-height:48px;text-align:left;padding:10px 12px;background:#123043;color:#f2f8fc;border:1px solid #416377;border-radius:8px;font:15px/1.4 system-ui}.reserve-tap-options small{display:block;color:#bdd2dd;font-size:12px}
